@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "fastify": ["./node_modules/fastify"]
+    },
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src",
+    "prisma"
+  ]
+}

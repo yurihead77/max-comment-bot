@@ -1,0 +1,14 @@
+node_modules
+pnpm-store
+.turbo
+dist
+.env
+dist
+build
+apps/api/prisma/dev.db
+apps/api/prisma/dev.db-journal
+uploads
+coverage
+*.log
+.vscode
+.DS_Store

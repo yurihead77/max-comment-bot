@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CommentStatus {
+  active
+  hidden
+  deleted
+}
+
+enum RestrictionScopeType {
+  global
+  chat
+}
+
+enum RestrictionType {
+  temporary_mute
+  permanent_block
+}
+
+enum AdminRole {
+  admin
+  moderator
+}
+
+model User {
+  id         String   @id @default(cuid())
+  maxUserId  String   @unique @map("max_user_id")
+  username   String?
+  firstName  String?  @map("first_name")
+  lastName   String?  @map("last_name")
+  photoUrl   String?  @map("photo_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  comments     Comment[]
+  restrictions UserRestriction[]
+
+  @@map("users")
+}
+
+model Chat {
+  id        String   @id @default(cuid())
+  maxChatId String   @unique @map("max_chat_id")
+  type      String
+  title     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  posts Post[]
+
+  @@map("chats")
+}
+
+model Post {
+  id             String   @id @default(cuid())
+  chatId         String   @map("chat_id")
+  maxMessageId   String   @map("max_message_id")
+  botMessageText String?  @map("bot_message_text")
+  commentsCount  Int      @default(0) @map("comments_count")
+  status         String   @default("active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  chat     Chat      @relation(fields: [chatId], references: [id], onDelete: Restrict)
+  comments Comment[]
+
+  @@unique([chatId, maxMessageId])
+  @@map("posts")
+}
+
+model Comment {
+  id              String        @id @default(cuid())
+  postId          String        @map("post_id")
+  authorId        String        @map("author_id")
+  parentCommentId String?       @map("parent_comment_id")
+  text            String
+  status          CommentStatus @default(active)
+  isEdited        Boolean       @default(false) @map("is_edited")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  editedAt        DateTime?     @map("edited_at")
+  deletedAt       DateTime?     @map("deleted_at")
+  hiddenAt        DateTime?     @map("hidden_at")
+
+  post        Post                 @relation(fields: [postId], references: [id], onDelete: Restrict)
+  author      User                 @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  attachments CommentAttachment[]
+  editHistory CommentEditHistory[]
+
+  @@index([postId, status, createdAt])
+  @@map("comments")
+}
+
+model CommentAttachment {
+  id        String   @id @default(cuid())
+  commentId String?  @map("comment_id")
+  type      String
+  url       String
+  mimeType  String   @map("mime_type")
+  fileSize  Int      @map("file_size")
+  width     Int?
+  height    Int?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment Comment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+
+  @@map("comment_attachments")
+}
+
+model CommentEditHistory {
+  id           String   @id @default(cuid())
+  commentId    String   @map("comment_id")
+  editorUserId String   @map("editor_user_id")
+  oldText      String   @map("old_text")
+  newText      String   @map("new_text")
+  editedByRole String   @map("edited_by_role")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Restrict)
+
+  @@map("comment_edit_history")
+}
+
+model UserRestriction {
+  id              String               @id @default(cuid())
+  userId          String               @map("user_id")
+  scopeType       RestrictionScopeType @default(global) @map("scope_type")
+  chatId          String?              @map("chat_id")
+  restrictionType RestrictionType      @map("restriction_type")
+  reason          String?
+  startsAt        DateTime             @default(now()) @map("starts_at")
+  endsAt          DateTime?            @map("ends_at")
+  isActive        Boolean              @default(true) @map("is_active")
+  createdByUserId String               @map("created_by_user_id")
+  updatedByUserId String?              @map("updated_by_user_id")
+  revokedByUserId String?              @map("revoked_by_user_id")
+  revokedAt       DateTime?            @map("revoked_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, scopeType, isActive])
+  @@map("user_restrictions")
+}
+
+model ModerationAction {
+  id                String   @id @default(cuid())
+  actionType        String   @map("action_type")
+  targetUserId      String?  @map("target_user_id")
+  targetCommentId   String?  @map("target_comment_id")
+  targetPostId      String?  @map("target_post_id")
+  performedByUserId String   @map("performed_by_user_id")
+  reason            String?
+  payloadJson       Json?    @map("payload_json")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@map("moderation_actions")
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         AdminRole
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  sessions     AdminSession[]
+
+  @@map("admin_users")
+}
+
+model AdminSession {
+  id          String   @id @default(cuid())
+  adminUserId String   @map("admin_user_id")
+  tokenHash   String   @unique @map("token_hash")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@map("admin_sessions")
+}
+
+model SyncJob {
+  id         String   @id @default(cuid())
+  postId     String   @map("post_id")
+  status     String   @default("pending")
+  error      String?
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([postId, status])
+  @@map("sync_jobs")
+}

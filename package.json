@@ -1,0 +1,32 @@
+{
+  "name": "max-comment-bot",
+  "private": true,
+  "version": "0.2.0",
+  "packageManager": "pnpm@10.2.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @max-comment-bot/api prisma:generate",
+    "db:migrate": "pnpm --filter @max-comment-bot/api prisma:migrate",
+    "db:seed": "pnpm --filter @max-comment-bot/api prisma:seed",
+    "smoke:functional": "node --env-file=apps/api/.env scripts/smoke-functional.mjs",
+    "verify:upload-url": "node scripts/verify-upload-public-url.mjs"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.14",
+    "typescript": "^5.6.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "fastify": "^5.8.5"
+    },
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
+  }
+}
