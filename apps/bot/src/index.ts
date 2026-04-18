@@ -15,6 +15,10 @@ const envSchema = z.object({
   MAX_API_BASE_URL: z.string().url(),
   MAX_WEBAPP_URL: z.string().url(),
   API_PORT: z.coerce.number().default(3001),
+  /** Base URL the bot uses to call API (register, sync is triggered from API → bot). Same host default; set in Docker/prod. */
+  API_INTERNAL_BASE_URL: z.string().url().optional(),
+  /** Must match `secret` from MAX POST /subscriptions; validated via header X-Max-Bot-Api-Secret */
+  MAX_WEBHOOK_SECRET: z.string().optional(),
   BOT_MOCK_MAX_API: z
     .string()
     .optional()
@@ -28,14 +32,19 @@ if (env.NODE_ENV === "production" && env.BOT_MOCK_MAX_API) {
   throw new Error("BOT_MOCK_MAX_API cannot be enabled in production");
 }
 
-const apiBaseUrl = `http://localhost:${env.API_PORT}`;
+const apiBaseUrl = env.API_INTERNAL_BASE_URL ?? `http://127.0.0.1:${env.API_PORT}`;
 
 async function bootstrap() {
   const app = Fastify({ logger: true });
   const maxClient = new MaxClient(env.MAX_BOT_TOKEN, env.MAX_API_BASE_URL, env.MAX_WEBAPP_URL);
   const postPublisher = new PostPublisherService(maxClient, apiBaseUrl);
 
-  await app.register(webhookRoutes);
+  app.get("/healthz", async () => ({ ok: true }));
+
+  await app.register(webhookRoutes, {
+    apiBaseUrl,
+    maxWebhookSecret: env.MAX_WEBHOOK_SECRET && env.MAX_WEBHOOK_SECRET.length > 0 ? env.MAX_WEBHOOK_SECRET : undefined
+  });
 
   app.post("/internal/sync-button", async (request, reply) => {
     const body = request.body as {

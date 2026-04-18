@@ -123,9 +123,18 @@ async function main() {
     });
 
     await waitFor(async () => {
+      const r = await fetch(`${BOT}/healthz`);
+      return r.ok;
+    });
+
+    const webhookHeaders = { "content-type": "application/json" };
+    if (process.env.MAX_WEBHOOK_SECRET) {
+      webhookHeaders["X-Max-Bot-Api-Secret"] = process.env.MAX_WEBHOOK_SECRET;
+    }
+    await waitFor(async () => {
       const r = await fetch(`${BOT}/webhook/max`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: webhookHeaders,
         body: "{}"
       });
       return r.ok;

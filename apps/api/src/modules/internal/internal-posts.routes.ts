@@ -29,8 +29,22 @@ export const internalPostsRoutes: FastifyPluginAsync = async (app) => {
           where: { id: postId },
           data: { chatId: chat.id, maxMessageId: messageId, botMessageText }
         })
-      : await app.prisma.post.create({
-          data: { chatId: chat.id, maxMessageId: messageId, botMessageText }
+      : await app.prisma.post.upsert({
+          where: {
+            chatId_maxMessageId: {
+              chatId: chat.id,
+              maxMessageId: messageId
+            }
+          },
+          create: {
+            chatId: chat.id,
+            maxMessageId: messageId,
+            botMessageText: botMessageText ?? null
+          },
+          update: {
+            status: "active",
+            ...(botMessageText !== undefined && botMessageText !== "" ? { botMessageText } : {})
+          }
         });
 
     return { id: post.id };

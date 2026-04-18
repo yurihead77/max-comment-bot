@@ -6,7 +6,7 @@
 
 - `NODE_ENV=production`, `DEV_MAX_AUTH_BYPASS=false`, `BOT_MOCK_MAX_API=false`.
 - `MAX_BOT_TOKEN`, `MAX_API_BASE_URL`, `MAX_WEBAPP_URL` — боевые значения.
-- Webhook бота на HTTPS URL, доступный из MAX.
+- Webhook бота на HTTPS URL, доступный из MAX (формат тел, секрет, curl: [webhook-max.md](webhook-max.md)).
 - API и бот запущены (`start:prod`), БД с миграциями и seed.
 
 ## Сценарий
