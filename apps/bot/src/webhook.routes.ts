@@ -142,7 +142,8 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
 
       request.log.info(
         {
-          webhook: "message_created",
+          webhook: "message_created_extracted",
+          updateType: parsed.updateType,
           chatId,
           messageId,
           senderUserId,
@@ -150,7 +151,7 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
           hasUrl: parsed.message.url != null,
           hasStat: parsed.message.stat != null
         },
-        "parsed message_created identifiers"
+        "MAX message_created: extracted chatId, messageId, updateType"
       );
 
       if (!chatId || !messageId) {

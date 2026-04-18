@@ -33,7 +33,20 @@
 }
 ```
 
-Реальные имена полей для **`chat_id`** и идентификатора сообщения в JSON могут отличаться (например вложенный `recipient.chat`, поле `mid` вместо `message_id`). В коде бота **`max-webhook-payload.ts`** перебираются несколько вариантов; если парсинг не сработал, в логах будет **`message_created_skipped`** и фрагмент `message` — по нему можно дописать экстрактор.
+Также поддерживается форма с **`message.chat.id`** и текстом на корне сообщения (как в части webhook’ов MAX):
+
+```json
+{
+  "update_type": "message_created",
+  "message": {
+    "message_id": "123",
+    "chat": { "id": "456" },
+    "text": "test"
+  }
+}
+```
+
+Реальные имена полей могут отличаться (`recipient.chat`, `mid` в `body`, и т.д.). Экстракторы в **`apps/bot/src/max-webhook-payload.ts`**; при неудаче — лог **`message_created_skipped`** и `messageSample`.
 
 ### Какие события ожидать
 

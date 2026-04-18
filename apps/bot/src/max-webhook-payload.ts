@@ -48,9 +48,19 @@ function coerceId(v: unknown): string | undefined {
 
 /**
  * MAX Update.message (see https://dev.max.ru/docs-api/objects/Message).
- * Field names may evolve; we try several shapes used in Bot API–style JSON.
+ * Webhook payloads may use `message.chat.id`, `recipient.chat_id`, or `body`-nested shapes.
  */
 export function extractChatIdFromMessage(message: Record<string, unknown>): string | undefined {
+  const directChat = message.chat;
+  if (directChat && typeof directChat === "object") {
+    const c = directChat as Record<string, unknown>;
+    const id = coerceId(c.id ?? c.chat_id ?? c.chatId);
+    if (id) return id;
+  }
+
+  const topLevelChat = coerceId(message.chat_id ?? message.chatId);
+  if (topLevelChat) return topLevelChat;
+
   const rec = message.recipient;
   if (rec && typeof rec === "object") {
     const r = rec as Record<string, unknown>;
@@ -62,7 +72,8 @@ export function extractChatIdFromMessage(message: Record<string, unknown>): stri
     }
     return coerceId(r.chat_id ?? r.chatId ?? r.id ?? r.user_id);
   }
-  return coerceId(message.chat_id ?? message.chatId);
+
+  return undefined;
 }
 
 export function extractMessageIdFromMessage(message: Record<string, unknown>): string | undefined {
@@ -73,6 +84,9 @@ export function extractMessageIdFromMessage(message: Record<string, unknown>): s
 }
 
 export function extractMessageText(message: Record<string, unknown>): string | undefined {
+  const root = message.text ?? message.caption;
+  if (typeof root === "string") return root;
+
   const body = message.body;
   if (!body || typeof body !== "object") return undefined;
   const b = body as Record<string, unknown>;
