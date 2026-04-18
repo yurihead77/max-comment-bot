@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export async function adminLogin(email: string, password: string) {
   const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
