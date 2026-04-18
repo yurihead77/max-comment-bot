@@ -1,19 +1,17 @@
 /**
  * CLI: register / list / remove MAX webhook subscriptions (POST|GET|DELETE /subscriptions).
  *
- * Env (same as bot, load from repo root `.env` or `apps/bot/.env`):
- *   MAX_BOT_TOKEN, MAX_API_BASE_URL, MAX_API_VERSION (optional), MAX_WEBHOOK_URL,
- *   MAX_WEBHOOK_SECRET (optional — omitted in POST body if empty)
+ * Env loading (see loadMaxWebhookCliEnv):
+ *   - If ENV_FILE is set: only that file (absolute or relative to cwd).
+ *   - Else merge from repo root: apps/bot/.env → .env → .env.production (each step overrides; production wins).
  *
  * Usage:
  *   pnpm --filter @max-comment-bot/bot webhook:list
- *   pnpm --filter @max-comment-bot/bot webhook:subscribe
- *   pnpm --filter @max-comment-bot/bot webhook:unsubscribe
- *   pnpm --filter @max-comment-bot/bot webhook:resubscribe
+ *   ENV_FILE=/opt/max-comment-bot/.env.production pnpm webhook:list
  */
 
 import dotenv from "dotenv";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
@@ -26,8 +24,39 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-dotenv.config({ path: resolve(__dirname, "../../../.env") });
-dotenv.config({ path: resolve(__dirname, "../.env"), override: true });
+/** Repo root: apps/bot/scripts → …/max-comment-bot */
+const REPO_ROOT = resolve(__dirname, "../../..");
+
+function loadMaxWebhookCliEnv(): { attemptedPaths: string[]; explicitEnvFile: boolean } {
+  const explicit = process.env.ENV_FILE?.trim();
+  const attemptedPaths: string[] = [];
+
+  if (explicit) {
+    const path = isAbsolute(explicit) ? explicit : resolve(process.cwd(), explicit);
+    attemptedPaths.push(path);
+    dotenv.config({ path, override: true });
+    return { attemptedPaths, explicitEnvFile: true };
+  }
+
+  const mergeChain = [
+    resolve(REPO_ROOT, "apps/bot/.env"),
+    resolve(REPO_ROOT, ".env"),
+    resolve(REPO_ROOT, ".env.production")
+  ] as const;
+
+  dotenv.config({ path: mergeChain[0] });
+  attemptedPaths.push(mergeChain[0]);
+
+  dotenv.config({ path: mergeChain[1], override: true });
+  attemptedPaths.push(mergeChain[1]);
+
+  dotenv.config({ path: mergeChain[2], override: true });
+  attemptedPaths.push(mergeChain[2]);
+
+  return { attemptedPaths, explicitEnvFile: false };
+}
+
+const envLoadMeta = loadMaxWebhookCliEnv();
 
 const envSchema = z.object({
   MAX_BOT_TOKEN: z.string().min(1, "MAX_BOT_TOKEN is required"),
@@ -55,11 +84,38 @@ function parseArgs(argv: string[]): { cmd: string; webhookUrl?: string } {
   return { cmd, webhookUrl };
 }
 
+function parseEnvOrExit(): z.infer<typeof envSchema> {
+  const parsed = envSchema.safeParse(process.env);
+  if (parsed.success) return parsed.data;
+
+  const missingToken = !process.env.MAX_BOT_TOKEN?.trim();
+  console.error("Environment validation failed for MAX webhook CLI.\n");
+  if (missingToken) {
+    console.error("MAX_BOT_TOKEN is missing (or empty).");
+  } else {
+    console.error(parsed.error.flatten().fieldErrors);
+  }
+  console.error("");
+  if (envLoadMeta.explicitEnvFile) {
+    console.error("Loaded only ENV_FILE (no merge with repo .env files):");
+  } else {
+    console.error("Merged env in order (later files override earlier); attempted paths:");
+  }
+  for (const p of envLoadMeta.attemptedPaths) {
+    console.error(`  - ${p}`);
+  }
+  console.error("");
+  console.error(
+    "Fix: export variables in the shell, or use the same file as PM2, e.g.\n" +
+      "  set -a && source /opt/max-comment-bot/.env.production && set +a && pnpm webhook:list\n" +
+      "or:\n" +
+      "  ENV_FILE=/opt/max-comment-bot/.env.production pnpm webhook:list"
+  );
+  process.exit(1);
+}
+
 async function main(): Promise<void> {
   const { cmd, webhookUrl: urlArg } = parseArgs(process.argv);
-  const env = envSchema.parse(process.env);
-  const { MAX_BOT_TOKEN, MAX_API_BASE_URL, MAX_API_VERSION } = env;
-  const webhookUrl = urlArg ?? env.MAX_WEBHOOK_URL;
 
   if (cmd === "help" || cmd === "-h" || cmd === "--help") {
     console.log(`Commands:
@@ -68,9 +124,16 @@ async function main(): Promise<void> {
   unsubscribe       DELETE /subscriptions?url=… (needs MAX_WEBHOOK_URL or --url=)
   resubscribe       unsubscribe then subscribe (same URL)
 
-Env: MAX_BOT_TOKEN, MAX_API_BASE_URL, MAX_API_VERSION, MAX_WEBHOOK_URL, MAX_WEBHOOK_SECRET`);
+Env: MAX_BOT_TOKEN, MAX_API_BASE_URL, MAX_API_VERSION, MAX_WEBHOOK_URL, MAX_WEBHOOK_SECRET
+
+Env files (default): <repo>/apps/bot/.env → <repo>/.env → <repo>/.env.production (merge; production wins).
+Override: ENV_FILE=/path/to/.env.production pnpm webhook:list (only that file is loaded).`);
     process.exit(0);
   }
+
+  const env = parseEnvOrExit();
+  const { MAX_BOT_TOKEN, MAX_API_BASE_URL, MAX_API_VERSION } = env;
+  const webhookUrl = urlArg ?? env.MAX_WEBHOOK_URL;
 
   try {
     if (cmd === "list") {

@@ -12,7 +12,37 @@
 
 Заголовок **`Authorization: <MAX_BOT_TOKEN>`** (как для **`POST /messages`**), тело — JSON при `POST`.
 
-В репозитории это автоматизировано скриптами (из корня монорепо, нужен **`.env`** с **`MAX_BOT_TOKEN`**, **`MAX_API_BASE_URL`**, при subscribe — **`MAX_WEBHOOK_URL`**):
+В репозитории это автоматизировано скриптами (**`MAX_BOT_TOKEN`**, **`MAX_API_BASE_URL`**, при subscribe — **`MAX_WEBHOOK_URL`**).
+
+### Переменные для CLI и `.env.production`
+
+Процесс бота в production часто стартуют с **`--env-file=/opt/max-comment-bot/.env.production`** (PM2 и т.п.), тогда **`pnpm webhook:*`** должен видеть **те же** переменные.
+
+По умолчанию CLI читает и **мерджит** (поздний файл перекрывает ранний) три пути **относительно корня репозитория**:
+
+1. **`apps/bot/.env`**
+2. **`.env`**
+3. **`.env.production`** — итоговые production-значения не теряются: ключи из этого файла побеждают при конфликте.
+
+На сервере при деплое в **`/opt/max-comment-bot`** это эквивалентно цепочке  
+`/opt/max-comment-bot/apps/bot/.env` → **`/opt/max-comment-bot/.env`** → **`/opt/max-comment-bot/.env.production`**.
+
+Явный файл (без merge), как у PM2:
+
+```bash
+ENV_FILE=/opt/max-comment-bot/.env.production pnpm webhook:list
+```
+
+Или подгрузить production в shell и вызвать pnpm (переменные попадут в дочерний процесс):
+
+```bash
+cd /opt/max-comment-bot
+set -a && source /opt/max-comment-bot/.env.production && set +a
+pnpm webhook:list
+pnpm webhook:resubscribe
+```
+
+Если **`MAX_BOT_TOKEN`** не найден, CLI выведет список путей, с которых пытались читать env.
 
 ```bash
 pnpm webhook:list
@@ -21,7 +51,7 @@ pnpm webhook:unsubscribe
 pnpm webhook:resubscribe
 ```
 
-Реализация: **`apps/bot/src/max-subscriptions.ts`**, CLI: **`apps/bot/scripts/max-webhook-subscriptions.ts`**. На сервере достаточно выставить переменные и выполнить, например, **`pnpm webhook:resubscribe`** после деплоя (или только **`subscribe`**, если подписки ещё не было).
+Реализация: **`apps/bot/src/max-subscriptions.ts`**, CLI: **`apps/bot/scripts/max-webhook-subscriptions.ts`**. После деплоя достаточно **`pnpm webhook:resubscribe`** (или **`subscribe`**, если подписки ещё не было), с тем же env, что у работающего бота.
 
 ### Эквивалент curl (как у скриптов)
 
@@ -135,6 +165,7 @@ curl -sS -G -X DELETE "$BASE/subscriptions" \
 | `API_INTERNAL_BASE_URL` | Базовый URL API для `fetch` из бота, например `http://api:3001` в Docker. По умолчанию `http://127.0.0.1:${API_PORT}`. |
 | `MAX_WEBHOOK_SECRET` | Ожидаемое значение заголовка `X-Max-Bot-Api-Secret`. Если не задано — проверка отключена (удобно для локального смока; в prod задайте и совпадающий `secret` в подписке). |
 | `MAX_WEBHOOK_URL` | Полный публичный URL **`POST /webhook/max`** для CLI **`pnpm webhook:subscribe`** / **`resubscribe`** (не путать с `MAX_WEBAPP_URL`). |
+| `ENV_FILE` | Только для CLI **`pnpm webhook:*`**: абсолютный или относительный (**от `cwd`**) путь к одному env-файлу; при задании merge из репозитория **не** выполняется. |
 | `BOT_INTERNAL_BASE_URL` | На стороне **API** — URL бота для вызова `/internal/sync-button` (см. `apps/api` env). |
 
 ## Ручная проверка (curl)

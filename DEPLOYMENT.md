@@ -52,12 +52,13 @@ cd /opt/max-comment-bot/apps/bot
 pnpm run start:prod
 ```
 
-**MAX webhook subscription** (не настраивается URL мини-приложения в UI): один раз после смены URL или секрета вызовите из корня репозитория (нужны **`MAX_BOT_TOKEN`**, **`MAX_API_BASE_URL`**, **`MAX_WEBHOOK_URL`**, опционально **`MAX_WEBHOOK_SECRET`** в окружении):
+**MAX webhook subscription** (не настраивается URL мини-приложения в UI): один раз после смены URL или секрета вызовите из корня репозитория. Переменные должны совпадать с теми, что у бота (например **`/opt/max-comment-bot/.env.production`** при **`--env-file`** в PM2):
 
 ```bash
 cd /opt/max-comment-bot
-pnpm webhook:list
-pnpm webhook:resubscribe
+ENV_FILE=/opt/max-comment-bot/.env.production pnpm webhook:list
+ENV_FILE=/opt/max-comment-bot/.env.production pnpm webhook:resubscribe
+# или: set -a && source /opt/max-comment-bot/.env.production && set +a && pnpm webhook:resubscribe
 ```
 
 Подробнее: **`docs/webhook-max.md`**.
