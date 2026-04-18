@@ -15,14 +15,16 @@ export class PostPublisherService {
 
   async publishPost(args: PublishArgs) {
     const startParam = `post_${args.postId}`;
-    const published = await this.maxClient.publishPost({
+    const published = (await this.maxClient.publishPost({
       chatId: args.chatId,
       text: args.text,
       startParam,
       buttonText: getDiscussButtonText(0)
-    });
-
-    const messageId = String(published?.result?.message_id ?? published?.message_id);
+    })) as Record<string, unknown>;
+    const result = published.result && typeof published.result === "object" ? (published.result as Record<string, unknown>) : undefined;
+    const messageId = String(
+      result?.message_id ?? published.message_id ?? published.messageId ?? ""
+    );
     await fetch(`${this.apiBaseUrl}/api/internal/posts/register`, {
       method: "POST",
       headers: { "content-type": "application/json" },

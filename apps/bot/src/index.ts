@@ -2,7 +2,12 @@ import dotenv from "dotenv";
 import Fastify from "fastify";
 import { z } from "zod";
 import { runDevPolling } from "./dev-polling";
-import { MaxClient } from "./max-client";
+import { MaxApiError, MaxClient } from "./max-client";
+
+function redactBotTokenInUrl(url: string, token: string): string {
+  if (!token || !url.includes(token)) return url;
+  return url.split(token).join("***");
+}
 import { PostPublisherService } from "./post-publisher.service";
 import { webhookRoutes } from "./webhook.routes";
 
@@ -59,13 +64,59 @@ async function bootstrap() {
       return reply.send({ ok: true, mocked: true });
     }
 
-    await maxClient.editDiscussButton({
-      chatId: body.chatId,
-      messageId: body.messageId,
-      buttonText: body.buttonText,
-      startParam: `post_${body.postId}`
-    });
-    return reply.send({ ok: true });
+    const startParam = `post_${body.postId}`;
+    const maxApiTargetUrl = maxClient.editMessageReplyMarkupUrl();
+
+    app.log.info(
+      {
+        route: "/internal/sync-button",
+        postId: body.postId,
+        chatId: body.chatId,
+        messageId: body.messageId,
+        buttonText: body.buttonText,
+        startParam,
+        maxApiUrlRedacted: redactBotTokenInUrl(maxApiTargetUrl, env.MAX_BOT_TOKEN),
+        maxApiBaseUrl: env.MAX_API_BASE_URL,
+        maxWebappUrl: env.MAX_WEBAPP_URL
+      },
+      "internal sync-button: calling MAX API (editMessageReplyMarkup uses MAX_API_BASE_URL, not MAX_WEBAPP_URL)"
+    );
+
+    try {
+      await maxClient.editDiscussButton({
+        chatId: body.chatId,
+        messageId: body.messageId,
+        buttonText: body.buttonText,
+        startParam
+      });
+      return reply.send({ ok: true });
+    } catch (e) {
+      if (e instanceof MaxApiError) {
+        app.log.error(
+          {
+            route: "/internal/sync-button",
+            postId: body.postId,
+            chatId: body.chatId,
+            messageId: body.messageId,
+            err: e.message,
+            maxApiUrlRedacted: redactBotTokenInUrl(e.url, env.MAX_BOT_TOKEN),
+            status: e.status,
+            contentType: e.contentType,
+            bodyPreview: e.bodyPreview
+          },
+          "MAX editMessageReplyMarkup failed (non-JSON or HTTP error — check MAX_API_BASE_URL host/path)"
+        );
+        return reply.code(502).send({
+          ok: false,
+          error: e.message,
+          maxApiStatus: e.status,
+          contentType: e.contentType,
+          bodyPreview: e.bodyPreview
+        });
+      }
+      app.log.error({ err: e, postId: body.postId }, "internal sync-button unexpected error");
+      return reply.code(502).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
   });
 
   app.post("/internal/publish", async (request, reply) => {

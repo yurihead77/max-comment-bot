@@ -132,6 +132,12 @@ curl -sS -X POST "http://127.0.0.1:3001/api/internal/posts/<POST_ID>/sync-button
 
 Ожидание: `{"ok":true}`. В логах бота — вызов **`/internal/sync-button`** и ответ MAX на **`editMessageReplyMarkup`** (если не включён `BOT_MOCK_MAX_API` в development).
 
+### Ошибка `Unexpected token '<'` / HTML вместо JSON
+
+Вызовы MAX Bot API идут на **`MAX_API_BASE_URL`** (путь вида `/bot<token>/editMessageReplyMarkup`). **`MAX_WEBAPP_URL`** используется только внутри JSON кнопки `open_app`, не как `fetch` URL.
+
+Если в логах **`bodyPreview`** начинается с `<html>`, проверьте: **`MAX_API_BASE_URL`** указывает на хост **HTTP API**, а не на сайт мини-приложения или маркетинговую страницу. В логе **`internal sync-button`** смотрите **`maxApiUrlRedacted`** и **`maxApiBaseUrl`**.
+
 ## Как снять реальный payload с прод-сервера
 
 1. Задайте **`MAX_WEBHOOK_SECRET`** и тот же `secret` в подписке MAX.
