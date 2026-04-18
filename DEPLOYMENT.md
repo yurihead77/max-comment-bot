@@ -52,6 +52,16 @@ cd /opt/max-comment-bot/apps/bot
 pnpm run start:prod
 ```
 
+**MAX webhook subscription** (не настраивается URL мини-приложения в UI): один раз после смены URL или секрета вызовите из корня репозитория (нужны **`MAX_BOT_TOKEN`**, **`MAX_API_BASE_URL`**, **`MAX_WEBHOOK_URL`**, опционально **`MAX_WEBHOOK_SECRET`** в окружении):
+
+```bash
+cd /opt/max-comment-bot
+pnpm webhook:list
+pnpm webhook:resubscribe
+```
+
+Подробнее: **`docs/webhook-max.md`**.
+
 `pnpm run start:prod` in both apps is **`node dist/<entry>.js` only** — it does **not** pass `--env-file` and does **not** load `.env` by itself. All variables (`DATABASE_URL`, `MAX_*`, `UPLOAD_PUBLIC_BASE_URL`, etc.) must already exist in the process environment.
 
 ### Where production env comes from

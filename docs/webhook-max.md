@@ -1,5 +1,59 @@
 # MAX webhook: формат, обработка, проверка
 
+## Мини-приложение ≠ webhook URL
+
+В кабинете MAX для **мини-приложения** задаётся URL **открытия Web App** (то же значение, что у вас в **`MAX_WEBAPP_URL`** для кнопки `open_app`). Этот URL **не** подставляется платформой как endpoint для **Bot API webhook**.
+
+Доставка событий (`message_created`, `bot_started`, …) на ваш сервер настраивается **только** через Bot API:
+
+1. **`POST https://platform-api.max.ru/subscriptions?v=<версия>`** — зарегистрировать HTTPS URL (порт **443**), список **`update_types`**, опционально **`secret`** (тогда MAX шлёт **`X-Max-Bot-Api-Secret`**).
+2. **`GET …/subscriptions`** — посмотреть активные подписки.
+3. **`DELETE …/subscriptions?url=<url>`** — отписать конкретный URL.
+
+Заголовок **`Authorization: <MAX_BOT_TOKEN>`** (как для **`POST /messages`**), тело — JSON при `POST`.
+
+В репозитории это автоматизировано скриптами (из корня монорепо, нужен **`.env`** с **`MAX_BOT_TOKEN`**, **`MAX_API_BASE_URL`**, при subscribe — **`MAX_WEBHOOK_URL`**):
+
+```bash
+pnpm webhook:list
+pnpm webhook:subscribe
+pnpm webhook:unsubscribe
+pnpm webhook:resubscribe
+```
+
+Реализация: **`apps/bot/src/max-subscriptions.ts`**, CLI: **`apps/bot/scripts/max-webhook-subscriptions.ts`**. На сервере достаточно выставить переменные и выполнить, например, **`pnpm webhook:resubscribe`** после деплоя (или только **`subscribe`**, если подписки ещё не было).
+
+### Эквивалент curl (как у скриптов)
+
+Подставьте токен и URL; для **`v`** используйте то же, что в **`MAX_API_VERSION`** (по умолчанию **1.2.5**).
+
+```bash
+export MAX_BOT_TOKEN="…"
+export V="${MAX_API_VERSION:-1.2.5}"
+export BASE="${MAX_API_BASE_URL:-https://platform-api.max.ru}"
+
+curl -sS "$BASE/subscriptions?v=$V" -H "Authorization: $MAX_BOT_TOKEN"
+```
+
+```bash
+curl -sS -X POST "$BASE/subscriptions?v=$V" \
+  -H "Authorization: $MAX_BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://commentbot.volkovyskii.ru/webhook/max\",\"update_types\":[\"message_created\",\"bot_started\"],\"secret\":\"${MAX_WEBHOOK_SECRET}\"}"
+```
+
+Если **`secret`** не нужен, удалите поле **`secret`** из JSON.
+
+```bash
+WEBHOOK_URL="https://commentbot.volkovyskii.ru/webhook/max"
+curl -sS -G -X DELETE "$BASE/subscriptions" \
+  --data-urlencode "v=$V" \
+  --data-urlencode "url=$WEBHOOK_URL" \
+  -H "Authorization: $MAX_BOT_TOKEN"
+```
+
+Проверка: после **`subscribe`** в **`pnpm webhook:list`** должен появиться ваш URL; в **`update_types`** обязательно должны быть **`message_created`** (и при необходимости **`bot_started`** — так же задаётся в коде **`DEFAULT_WEBHOOK_UPDATE_TYPES`**).
+
 ## Найденные проблемы (до правок)
 
 1. **`POST /webhook/max` был заглушкой** — всегда `{ ok: true }`, без разбора `Update`, без вызова API.
@@ -64,15 +118,15 @@
 1. **Публикация через ваш `PostPublisherService`** (`POST …/internal/publish` или аналог): сообщение уходит в MAX через официальный **`POST /messages`** с вложением **`inline_keyboard`** / **`open_app`** — кнопка есть сразу; затем вызывается **register** для связи `postId` ↔ `chatId`/`messageId`.
 2. **Пост создан в канале/чате без вашего `sendMessage`** (например админ написал пост): приходит **`message_created`**. Бот вызывает **register** (создаётся внутренний `postId`) и **sync-button**: бот дергает MAX **`PUT /messages?message_id=…`** с новой клавиатурой (`start_param` в поле `payload` кнопки `open_app`).
 
-Если webhook **не настроен** на правильный URL в кабинете MAX, события **не придут** — кнопка по событию не появится; нужен либо корректный webhook, либо сценарий **publish** через ваш бот.
+Если подписка **`POST /subscriptions`** не создана или URL неверный, события **не придут** — кнопка по событию не появится; нужен корректный webhook через API или сценарий **publish** через ваш бот.
 
 ### Точный URL webhook для вашего стенда
 
-Убедитесь, что в настройках бота на платформе MAX указан именно:
+Зарегистрируйте через **`pnpm webhook:subscribe`** (или curl выше) именно:
 
 **`https://commentbot.volkovyskii.ru/webhook/max`**
 
-(HTTPS, порт 443; самоподписанный сертификат MAX не примет.)
+Требования MAX: **HTTPS**, порт **443**, валидный сертификат (самоподписанный MAX не примет).
 
 ## Переменные окружения (бот)
 
@@ -80,6 +134,7 @@
 |------------|------------|
 | `API_INTERNAL_BASE_URL` | Базовый URL API для `fetch` из бота, например `http://api:3001` в Docker. По умолчанию `http://127.0.0.1:${API_PORT}`. |
 | `MAX_WEBHOOK_SECRET` | Ожидаемое значение заголовка `X-Max-Bot-Api-Secret`. Если не задано — проверка отключена (удобно для локального смока; в prod задайте и совпадающий `secret` в подписке). |
+| `MAX_WEBHOOK_URL` | Полный публичный URL **`POST /webhook/max`** для CLI **`pnpm webhook:subscribe`** / **`resubscribe`** (не путать с `MAX_WEBAPP_URL`). |
 | `BOT_INTERNAL_BASE_URL` | На стороне **API** — URL бота для вызова `/internal/sync-button` (см. `apps/api` env). |
 
 ## Ручная проверка (curl)

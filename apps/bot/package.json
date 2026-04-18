@@ -10,7 +10,11 @@
     "start:prod": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test src/max-webhook-payload.test.ts",
-    "lint": "echo \"no lint configured\""
+    "lint": "echo \"no lint configured\"",
+    "webhook:list": "tsx scripts/max-webhook-subscriptions.ts list",
+    "webhook:subscribe": "tsx scripts/max-webhook-subscriptions.ts subscribe",
+    "webhook:unsubscribe": "tsx scripts/max-webhook-subscriptions.ts unsubscribe",
+    "webhook:resubscribe": "tsx scripts/max-webhook-subscriptions.ts resubscribe"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

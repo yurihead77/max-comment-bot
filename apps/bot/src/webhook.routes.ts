@@ -5,6 +5,7 @@ import {
   extractMessageText,
   extractSenderUserId,
   headersToLogObject,
+  isMaxWebhookSecretHeaderPresent,
   parseMaxUpdate,
   truncateJson,
   verifyWebhookSecret
@@ -83,7 +84,17 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
     const hdr = headersToLogObject(request.headers as Record<string, string | string[] | undefined>);
     const secretCheck = verifyWebhookSecret(request.headers as Record<string, string | string[] | undefined>, maxWebhookSecret);
     if (secretCheck === "invalid") {
-      request.log.warn({ headers: hdr }, "webhook rejected: invalid or missing X-Max-Bot-Api-Secret");
+      request.log.warn(
+        {
+          webhook: "secret_rejected",
+          xMaxBotApiSecretHeaderPresent: isMaxWebhookSecretHeaderPresent(
+            request.headers as Record<string, string | string[] | undefined>
+          ),
+          maxWebhookSecretConfigured: Boolean(maxWebhookSecret && maxWebhookSecret.length > 0),
+          headers: hdr
+        },
+        "webhook rejected: X-Max-Bot-Api-Secret missing or mismatch vs MAX_WEBHOOK_SECRET"
+      );
       return reply.code(401).send({ error: "invalid webhook secret" });
     }
 
@@ -107,6 +118,26 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
     const messageKeys =
       parsed.kind === "message_created" ? Object.keys(parsed.message) : [];
 
+    const briefIds =
+      parsed.kind === "message_created"
+        ? {
+            chatId: extractChatIdFromMessage(parsed.message),
+            maxPutMessageId: extractMessageIdFromMessage(parsed.message)
+          }
+        : {};
+
+    request.log.info(
+      {
+        webhook: "max_platform_delivery",
+        maxWebhookSecretCheck: secretCheck,
+        updateType: parsed.updateType,
+        eventKind: parsed.kind,
+        userAgent: typeof request.headers["user-agent"] === "string" ? request.headers["user-agent"] : undefined,
+        ...briefIds
+      },
+      "MAX webhook: HTTPS POST accepted (payload follows in ingress log)"
+    );
+
     request.log.info(
       {
         webhook: "ingress",
@@ -116,7 +147,7 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
         eventKind: parsed.kind,
         messageTopLevelKeys: messageKeys
       },
-      "MAX webhook received"
+      "MAX webhook received (full body preview)"
     );
 
     if (parsed.kind === "bot_started") {
@@ -147,7 +178,7 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
           chatId,
           /** Same string later sent as `message_id` on MAX `PUT /messages` (from `body.mid` / `mid` / fallbacks). */
           maxPutMessageId: messageId,
-          messageIdLen: messageId.length,
+          messageIdLen: messageId?.length ?? 0,
           senderUserId,
           textPreview: text ? text.slice(0, 200) : undefined,
           hasUrl: parsed.message.url != null,

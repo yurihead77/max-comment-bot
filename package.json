@@ -13,7 +13,11 @@
     "db:seed": "pnpm --filter @max-comment-bot/api prisma:seed",
     "smoke:functional": "node --env-file=apps/api/.env scripts/smoke-functional.mjs",
     "verify:upload-url": "node scripts/verify-upload-public-url.mjs",
-    "test:bot-webhook-payload": "pnpm --filter @max-comment-bot/bot test"
+    "test:bot-webhook-payload": "pnpm --filter @max-comment-bot/bot test",
+    "webhook:list": "pnpm --filter @max-comment-bot/bot webhook:list",
+    "webhook:subscribe": "pnpm --filter @max-comment-bot/bot webhook:subscribe",
+    "webhook:unsubscribe": "pnpm --filter @max-comment-bot/bot webhook:unsubscribe",
+    "webhook:resubscribe": "pnpm --filter @max-comment-bot/bot webhook:resubscribe"
   },
   "devDependencies": {
     "turbo": "^2.0.14",

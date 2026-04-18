@@ -40,6 +40,13 @@ export function verifyWebhookSecret(
   return timingSafeEqualString(configuredSecret, received) ? "ok" : "invalid";
 }
 
+/** For logs only: whether the header was sent (value is never logged). */
+export function isMaxWebhookSecretHeaderPresent(headers: Record<string, string | string[] | undefined>): boolean {
+  const raw = headers[MAX_WEBHOOK_SECRET_HEADER] ?? headers["X-Max-Bot-Api-Secret"];
+  const received = Array.isArray(raw) ? raw[0] : raw;
+  return typeof received === "string" && received.length > 0;
+}
+
 function coerceId(v: unknown): string | undefined {
   if (v === null || v === undefined) return undefined;
   if (typeof v === "string" || typeof v === "number" || typeof v === "bigint") return String(v);
