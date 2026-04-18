@@ -7,7 +7,9 @@ dist
 build
 apps/api/prisma/dev.db
 apps/api/prisma/dev.db-journal
-uploads
+# Runtime image storage only (not src/modules/uploads)
+/uploads
+apps/api/uploads
 coverage
 *.log
 .vscode
