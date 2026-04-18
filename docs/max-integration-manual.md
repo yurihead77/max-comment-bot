@@ -30,5 +30,5 @@
 ## Отладка
 
 - Логи API: ошибки `sync-button` / `fetch` к боту.
-- Логи бота: ответы MAX API на `editMessageReplyMarkup` / `sendMessage`.
+- Логи бота: ответы MAX API на `POST /messages` / `PUT /messages` (platform-api, не Telegram-style пути).
 - Убедиться, что `BOT_INTERNAL_BASE_URL` с API указывает на реальный URL бота (внутрисетевой или публичный, как у вас принято).

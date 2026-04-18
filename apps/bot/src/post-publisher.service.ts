@@ -21,10 +21,12 @@ export class PostPublisherService {
       startParam,
       buttonText: getDiscussButtonText(0)
     })) as Record<string, unknown>;
-    const result = published.result && typeof published.result === "object" ? (published.result as Record<string, unknown>) : undefined;
-    const messageId = String(
-      result?.message_id ?? published.message_id ?? published.messageId ?? ""
-    );
+    const msg =
+      published.message && typeof published.message === "object"
+        ? (published.message as Record<string, unknown>)
+        : undefined;
+    const body = msg?.body && typeof msg.body === "object" ? (msg.body as Record<string, unknown>) : undefined;
+    const messageId = String(body?.mid ?? "");
     await fetch(`${this.apiBaseUrl}/api/internal/posts/register`, {
       method: "POST",
       headers: { "content-type": "application/json" },

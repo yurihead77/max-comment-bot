@@ -84,6 +84,7 @@ cd /opt/max-comment-bot/apps/api && node dist/server.js
 - `NODE_ENV=production`
 - `DEV_MAX_AUTH_BYPASS=false` (or omit) — при `production` + `true` API **не стартует** (Zod).
 - `BOT_MOCK_MAX_API=false` (or omit) — в **production** бот с `BOT_MOCK_MAX_API=true` **завершится с ошибкой**; в development флаг лишь пропускает вызов MAX на `/internal/sync-button`.
+- `MAX_API_BASE_URL` — для бота: **`https://platform-api.max.ru`** (официальный Bot API). Пути Telegram-стиля `/bot<token>/…` на `api.max.ru` дают **404 HTML**; см. `docs/webhook-max.md`. Опционально `MAX_API_VERSION` (query `v`, по умолчанию `1.2.5`).
 - `TRUST_PROXY=true` — если Nginx передаёт `X-Forwarded-Proto` / `X-Forwarded-For` (нужно для корректных secure-cookie и логов за reverse proxy).
 - `UPLOAD_PUBLIC_BASE_URL` — полный HTTPS URL префикса, по которому клиенты скачивают файлы (тот же хост, что проксирует `/uploads/`, или CDN). Без завершающего `/`.
 - Admin cookie: `httpOnly`, `secure` в production, `sameSite` по умолчанию `strict` (prod) / `lax` (dev), TTL = `ADMIN_SESSION_TTL_SECONDS` + `maxAge`; переопределение: `ADMIN_COOKIE_SAME_SITE`.

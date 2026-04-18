@@ -30,10 +30,6 @@ function normalizeApiBase(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
 }
 
-function buildBotMethodUrl(baseUrl: string, token: string, method: string): string {
-  return `${normalizeApiBase(baseUrl)}/bot${token}/${method}`;
-}
-
 async function readMaxJsonResponse(response: Response, url: string): Promise<unknown> {
   const status = response.status;
   const contentType = response.headers.get("content-type");
@@ -78,76 +74,110 @@ async function readMaxJsonResponse(response: Response, url: string): Promise<unk
   }
 }
 
+function assertMaxCommandSuccess(
+  data: unknown,
+  url: string,
+  status: number,
+  contentType: string | null,
+  bodyPreview: string
+): void {
+  if (data && typeof data === "object" && "success" in data && (data as { success: unknown }).success === false) {
+    const msg = (data as { message?: unknown }).message;
+    throw new MaxApiError(`MAX API success=false: ${String(msg ?? "")}`, url, status, contentType, bodyPreview);
+  }
+}
+
+/**
+ * MAX Bot HTTP API (see https://dev.max.ru/docs-api).
+ * Uses `POST /messages` + `PUT /messages?message_id=…` with `Authorization: <token>` and query `v=<api version>`.
+ * The legacy Telegram-style `/bot<token>/sendMessage` / `editMessageReplyMarkup` paths are not used on platform-api.max.ru.
+ */
 export class MaxClient {
+  private readonly apiVersion: string;
+
   constructor(
     private readonly token: string,
-    /** Must be MAX Bot HTTP API origin (e.g. https://api.max.ru), not the mini app URL. */
+    /** API origin, e.g. https://platform-api.max.ru (not the mini app site). */
     private readonly baseUrl: string,
-    /** Mini app URL for open_app only; never used as fetch() base for MAX API. */
-    private readonly webAppUrl: string
-  ) {}
-
-  /** Exact URL used for editMessageReplyMarkup (for logs / debugging). */
-  editMessageReplyMarkupUrl(): string {
-    return buildBotMethodUrl(this.baseUrl, this.token, "editMessageReplyMarkup");
+    /** Mini app URL for `open_app` button (`web_app` field); not used as fetch base URL. */
+    private readonly webAppUrl: string,
+    opts?: { apiVersion?: string }
+  ) {
+    this.apiVersion = opts?.apiVersion ?? "1.2.5";
   }
 
-  /** Exact URL used for sendMessage. */
-  sendMessageUrl(): string {
-    return buildBotMethodUrl(this.baseUrl, this.token, "sendMessage");
+  /** Diagnostic: POST /messages?chat_id=…&v=… (token only in Authorization header). */
+  postMessagesUrl(chatId: string): string {
+    return this.buildMessagesUrl({ chat_id: chatId });
+  }
+
+  /** Diagnostic: PUT /messages?message_id=…&v=… */
+  putMessagesUrl(messageId: string): string {
+    return this.buildMessagesUrl({ message_id: messageId });
+  }
+
+  private buildMessagesUrl(query: Record<string, string | undefined>): string {
+    const baseRoot = `${normalizeApiBase(this.baseUrl)}/`;
+    const u = new URL("messages", baseRoot);
+    u.searchParams.set("v", this.apiVersion);
+    for (const [k, v] of Object.entries(query)) {
+      if (v !== undefined && v !== "") u.searchParams.set(k, v);
+    }
+    return u.toString();
+  }
+
+  /** MAX inline_keyboard + open_app (see max-bot-api-client-go schemes). */
+  private openAppKeyboardAttachment(buttonText: string, startParam: string) {
+    return {
+      type: "inline_keyboard",
+      payload: {
+        buttons: [
+          [
+            {
+              type: "open_app",
+              text: buttonText,
+              web_app: this.webAppUrl,
+              payload: startParam
+            }
+          ]
+        ]
+      }
+    };
+  }
+
+  private async maxJsonFetch(method: "POST" | "PUT", url: string, body: unknown): Promise<unknown> {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        Authorization: this.token,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    const parsed = await readMaxJsonResponse(response, url);
+    const preview = JSON.stringify(parsed).slice(0, 300);
+    assertMaxCommandSuccess(parsed, url, response.status, response.headers.get("content-type"), preview);
+    return parsed;
   }
 
   async publishPost(payload: PublishPostPayload) {
-    const url = this.sendMessageUrl();
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        chat_id: payload.chatId,
-        text: payload.text,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                type: "open_app",
-                text: payload.buttonText,
-                web_app: {
-                  url: this.webAppUrl,
-                  start_param: payload.startParam
-                }
-              }
-            ]
-          ]
-        }
-      })
-    });
-    return readMaxJsonResponse(response, url);
+    const url = this.buildMessagesUrl({ chat_id: payload.chatId });
+    const body = {
+      text: payload.text,
+      attachments: [this.openAppKeyboardAttachment(payload.buttonText, payload.startParam)]
+    };
+    return this.maxJsonFetch("POST", url, body);
   }
 
+  /**
+   * Updates only inline keyboard via official API (PUT /messages?message_id=…).
+   * Docs: https://dev.max.ru/docs-api/methods/PUT/messages — `attachments` replaces keyboard when provided.
+   */
   async editDiscussButton(payload: SyncButtonPayload) {
-    const url = this.editMessageReplyMarkupUrl();
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        chat_id: payload.chatId,
-        message_id: payload.messageId,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                type: "open_app",
-                text: payload.buttonText,
-                web_app: {
-                  url: this.webAppUrl,
-                  start_param: payload.startParam
-                }
-              }
-            ]
-          ]
-        }
-      })
-    });
-    return readMaxJsonResponse(response, url);
+    const url = this.buildMessagesUrl({ message_id: payload.messageId });
+    const body = {
+      attachments: [this.openAppKeyboardAttachment(payload.buttonText, payload.startParam)]
+    };
+    return this.maxJsonFetch("PUT", url, body);
   }
 }

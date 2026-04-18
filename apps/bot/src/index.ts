@@ -18,6 +18,11 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   MAX_BOT_TOKEN: z.string().min(1),
   MAX_API_BASE_URL: z.string().url(),
+  /** Query param `v` on every MAX platform request (see dev.max.ru / official Go client). */
+  MAX_API_VERSION: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.trim().length > 0 ? v.trim() : "1.2.5")),
   MAX_WEBAPP_URL: z.string().url(),
   API_PORT: z.coerce.number().default(3001),
   /** Base URL the bot uses to call API (register, sync is triggered from API → bot). Same host default; set in Docker/prod. */
@@ -41,7 +46,9 @@ const apiBaseUrl = env.API_INTERNAL_BASE_URL ?? `http://127.0.0.1:${env.API_PORT
 
 async function bootstrap() {
   const app = Fastify({ logger: true });
-  const maxClient = new MaxClient(env.MAX_BOT_TOKEN, env.MAX_API_BASE_URL, env.MAX_WEBAPP_URL);
+  const maxClient = new MaxClient(env.MAX_BOT_TOKEN, env.MAX_API_BASE_URL, env.MAX_WEBAPP_URL, {
+    apiVersion: env.MAX_API_VERSION
+  });
   const postPublisher = new PostPublisherService(maxClient, apiBaseUrl);
 
   app.get("/healthz", async () => ({ ok: true }));
@@ -60,12 +67,12 @@ async function bootstrap() {
     };
 
     if (env.BOT_MOCK_MAX_API && env.NODE_ENV === "development") {
-      app.log.info({ postId: body.postId }, "BOT_MOCK_MAX_API: skip real MAX editMessageReplyMarkup");
+      app.log.info({ postId: body.postId }, "BOT_MOCK_MAX_API: skip real MAX PUT /messages");
       return reply.send({ ok: true, mocked: true });
     }
 
     const startParam = `post_${body.postId}`;
-    const maxApiTargetUrl = maxClient.editMessageReplyMarkupUrl();
+    const maxApiTargetUrl = maxClient.putMessagesUrl(body.messageId);
 
     app.log.info(
       {
@@ -75,11 +82,13 @@ async function bootstrap() {
         messageId: body.messageId,
         buttonText: body.buttonText,
         startParam,
+        maxApiMethod: "PUT /messages",
         maxApiUrlRedacted: redactBotTokenInUrl(maxApiTargetUrl, env.MAX_BOT_TOKEN),
         maxApiBaseUrl: env.MAX_API_BASE_URL,
+        maxApiVersion: env.MAX_API_VERSION,
         maxWebappUrl: env.MAX_WEBAPP_URL
       },
-      "internal sync-button: calling MAX API (editMessageReplyMarkup uses MAX_API_BASE_URL, not MAX_WEBAPP_URL)"
+      "internal sync-button: calling MAX API (PUT messages — token in Authorization header only)"
     );
 
     try {
@@ -104,7 +113,7 @@ async function bootstrap() {
             contentType: e.contentType,
             bodyPreview: e.bodyPreview
           },
-          "MAX editMessageReplyMarkup failed (non-JSON or HTTP error — check MAX_API_BASE_URL host/path)"
+          "MAX PUT /messages failed (non-JSON or HTTP error — use MAX_API_BASE_URL=https://platform-api.max.ru per dev.max.ru)"
         );
         return reply.code(502).send({
           ok: false,

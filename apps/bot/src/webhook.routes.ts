@@ -181,7 +181,7 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
       if (!synced) {
         request.log.error({ postId: reg.id }, "sync-button failed after register; post exists, use resync when bot/API healthy");
       } else {
-        request.log.info({ postId: reg.id }, "sync-button ok (editMessageReplyMarkup)");
+        request.log.info({ postId: reg.id }, "sync-button ok (MAX PUT /messages)");
       }
 
       return reply.send({

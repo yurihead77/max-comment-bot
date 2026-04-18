@@ -53,15 +53,15 @@
 | Сценарий | Типичное событие | Действие бота в MVP |
 |----------|------------------|---------------------|
 | Пользователь открыл чат с ботом / старт | `bot_started` | Только лог; пост не регистрируется. |
-| Новое сообщение в группе/канале, где бот админ | `message_created` | Извлечь `chatId` + `messageId` → **`POST /api/internal/posts/register`** → **`POST /api/internal/posts/:id/sync-button`** (через API → бот **`/internal/sync-button`** → `editMessageReplyMarkup`). |
+| Новое сообщение в группе/канале, где бот админ | `message_created` | Извлечь `chatId` + `messageId` → **`POST /api/internal/posts/register`** → **`POST /api/internal/posts/:id/sync-button`** (через API → бот **`/internal/sync-button`** → MAX **`PUT /messages`** с `inline_keyboard` / `open_app`). |
 | Другие `update_type` | любые | **200 OK**, в логах **`unsupported_update`** с телом (не глотаем молча). |
 
 Чтобы получать события из **группы/канала**, бота нужно назначить **администратором** (см. доку MAX к объекту Update).
 
 ## Когда появляется кнопка «Обсудить»
 
-1. **Публикация через ваш `PostPublisherService`** (`POST …/internal/publish` или аналог): сообщение уходит в MAX уже с **`open_app`** в `sendMessage` — кнопка есть сразу; затем вызывается **register** для связи `postId` ↔ `chatId`/`messageId`.
-2. **Пост создан в канале/чате без вашего `sendMessage`** (например админ написал пост): приходит **`message_created`**. Бот вызывает **register** (создаётся внутренний `postId`) и **sync-button**: API дергает бот **`editMessageReplyMarkup`**, чтобы добавить/обновить кнопку с `start_param=post_<uuid>`.
+1. **Публикация через ваш `PostPublisherService`** (`POST …/internal/publish` или аналог): сообщение уходит в MAX через официальный **`POST /messages`** с вложением **`inline_keyboard`** / **`open_app`** — кнопка есть сразу; затем вызывается **register** для связи `postId` ↔ `chatId`/`messageId`.
+2. **Пост создан в канале/чате без вашего `sendMessage`** (например админ написал пост): приходит **`message_created`**. Бот вызывает **register** (создаётся внутренний `postId`) и **sync-button**: бот дергает MAX **`PUT /messages?message_id=…`** с новой клавиатурой (`start_param` в поле `payload` кнопки `open_app`).
 
 Если webhook **не настроен** на правильный URL в кабинете MAX, события **не придут** — кнопка по событию не появится; нужен либо корректный webhook, либо сценарий **publish** через ваш бот.
 
@@ -130,13 +130,11 @@ curl -sS -X POST "http://127.0.0.1:3001/api/internal/posts/register" \
 curl -sS -X POST "http://127.0.0.1:3001/api/internal/posts/<POST_ID>/sync-button"
 ```
 
-Ожидание: `{"ok":true}`. В логах бота — вызов **`/internal/sync-button`** и ответ MAX на **`editMessageReplyMarkup`** (если не включён `BOT_MOCK_MAX_API` в development).
+Ожидание: `{"ok":true}`. В логах бота — вызов **`/internal/sync-button`** и успешный ответ MAX на **`PUT /messages`** (если не включён `BOT_MOCK_MAX_API` в development).
 
 ### Ошибка `Unexpected token '<'` / HTML вместо JSON
 
-Вызовы MAX Bot API идут на **`MAX_API_BASE_URL`** (путь вида `/bot<token>/editMessageReplyMarkup`). **`MAX_WEBAPP_URL`** используется только внутри JSON кнопки `open_app`, не как `fetch` URL.
-
-Если в логах **`bodyPreview`** начинается с `<html>`, проверьте: **`MAX_API_BASE_URL`** указывает на хост **HTTP API**, а не на сайт мини-приложения или маркетинговую страницу. В логе **`internal sync-button`** смотрите **`maxApiUrlRedacted`** и **`maxApiBaseUrl`**.
+Официальный Bot API MAX: **`https://platform-api.max.ru/messages`** с заголовком **`Authorization: <bot token>`** и query **`v=<версия>`** (см. [dev.max.ru/docs-api](https://dev.max.ru/docs-api)). Путей вида **`/bot<token>/sendMessage`** на этом хосте **нет** — часто отдаётся **404 HTML**. Задайте **`MAX_API_BASE_URL=https://platform-api.max.ru`**. **`MAX_WEBAPP_URL`** — только URL мини-приложения в поле **`web_app`** кнопки, не база для `fetch`.
 
 ## Как снять реальный payload с прод-сервера
 

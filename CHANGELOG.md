@@ -2,6 +2,10 @@
 
 ## 0.2.0 — 2026-04-17 (MVP-ready / pre-release)
 
+### MAX Bot API (platform-api)
+
+- **`MaxClient`**: вместо несуществующих путей `/bot<token>/sendMessage` и `editMessageReplyMarkup` используются официальные **`POST /messages?chat_id=…`** и **`PUT /messages?message_id=…`** на **`MAX_API_BASE_URL`** (по умолчанию `https://platform-api.max.ru`), заголовок **`Authorization: <token>`**, query **`v=MAX_API_VERSION`**, тело с **`attachments` / `inline_keyboard` / `open_app`** (`web_app` + `payload` как в [max-bot-api-client-go](https://github.com/max-messenger/max-bot-api-client-go)).
+
 ### Webhook MAX (bot)
 
 - Реальная обработка **`POST /webhook/max`**: `message_created` → register → sync-button; `bot_started` / прочие типы логируются.
