@@ -62,6 +62,16 @@ export const internalPostsRoutes: FastifyPluginAsync = async (app) => {
 
     const buttonText = post.commentsCount > 0 ? `Обсудить (${post.commentsCount})` : "Обсудить";
 
+    request.log.info(
+      {
+        postId,
+        maxChatId: post.chat.maxChatId,
+        maxPutMessageId: post.maxMessageId,
+        maxPutMessageIdLen: post.maxMessageId.length
+      },
+      "sync-button: POST bot /internal/sync-button (MAX PUT /messages uses this messageId)"
+    );
+
     try {
       const res = await fetch(`${env.BOT_INTERNAL_BASE_URL}/internal/sync-button`, {
         method: "POST",

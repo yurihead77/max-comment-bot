@@ -3,17 +3,19 @@ import { describe, it } from "node:test";
 import {
   extractChatIdFromMessage,
   extractMessageIdFromMessage,
+  extractMessageIdFromMessagesApiResponse,
   extractMessageText,
   parseMaxUpdate
 } from "./max-webhook-payload";
 
 describe("max-webhook-payload", () => {
-  it("extracts chatId from message.chat.id and message_id from production-like payload", () => {
+  it("extracts chatId and prefers body.mid over Telegram-style message_id (MAX PUT uses mid)", () => {
     const body = {
       update_type: "message_created",
       message: {
         message_id: "123",
         chat: { id: "456" },
+        body: { mid: "real-mid-from-max", text: "test" },
         text: "test"
       }
     };
@@ -26,8 +28,17 @@ describe("max-webhook-payload", () => {
     const msgText = extractMessageText(parsed.message);
 
     assert.equal(chatId, "456");
-    assert.equal(messageId, "123");
+    assert.equal(messageId, "real-mid-from-max");
     assert.equal(msgText, "test");
+  });
+
+  it("falls back to message_id when body.mid absent (synthetic / old payloads)", () => {
+    const message = {
+      message_id: "123",
+      chat: { id: "456" },
+      text: "test"
+    } as Record<string, unknown>;
+    assert.equal(extractMessageIdFromMessage(message), "123");
   });
 
   it("coerces numeric chat.id and message_id to string", () => {
@@ -38,6 +49,16 @@ describe("max-webhook-payload", () => {
     } as Record<string, unknown>;
     assert.equal(extractChatIdFromMessage(message), "-100123");
     assert.equal(extractMessageIdFromMessage(message), "999");
+  });
+
+  it("extractMessageIdFromMessagesApiResponse reads nested message.body.mid", () => {
+    const envelope = {
+      message: {
+        body: { mid: "post-response-mid-1" },
+        recipient: { chat_id: "1" }
+      }
+    } as Record<string, unknown>;
+    assert.equal(extractMessageIdFromMessagesApiResponse(envelope), "post-response-mid-1");
   });
 
   it("still reads recipient.chat_id when chat object absent", () => {

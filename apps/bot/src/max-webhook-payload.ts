@@ -76,11 +76,26 @@ export function extractChatIdFromMessage(message: Record<string, unknown>): stri
   return undefined;
 }
 
+/**
+ * Id for MAX `PUT /messages?message_id=…` matches **`Message.body.mid`** (and often `message.mid`).
+ * Prefer **`body.mid`** over legacy/Telegram-style **`message_id`** on the same object so a synthetic
+ * `message_id` in fixtures cannot shadow the real mid.
+ */
 export function extractMessageIdFromMessage(message: Record<string, unknown>): string | undefined {
   const body = message.body;
   const bodyMid =
     body && typeof body === "object" ? coerceId((body as Record<string, unknown>).mid) : undefined;
-  return coerceId(message.mid ?? message.message_id ?? message.messageId ?? message.id) ?? bodyMid;
+  if (bodyMid) return bodyMid;
+  return coerceId(message.mid ?? message.message_id ?? message.messageId ?? message.id);
+}
+
+/** Successful **`POST /messages`** body is `{ message: <Message> }` (same `Message` shape as webhooks). */
+export function extractMessageIdFromMessagesApiResponse(data: Record<string, unknown>): string | undefined {
+  const msg = data.message;
+  if (msg && typeof msg === "object") {
+    return extractMessageIdFromMessage(msg as Record<string, unknown>);
+  }
+  return extractMessageIdFromMessage(data);
 }
 
 export function extractMessageText(message: Record<string, unknown>): string | undefined {

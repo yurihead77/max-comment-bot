@@ -145,13 +145,15 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
           webhook: "message_created_extracted",
           updateType: parsed.updateType,
           chatId,
-          messageId,
+          /** Same string later sent as `message_id` on MAX `PUT /messages` (from `body.mid` / `mid` / fallbacks). */
+          maxPutMessageId: messageId,
+          messageIdLen: messageId.length,
           senderUserId,
           textPreview: text ? text.slice(0, 200) : undefined,
           hasUrl: parsed.message.url != null,
           hasStat: parsed.message.stat != null
         },
-        "MAX message_created: extracted chatId, messageId, updateType"
+        "MAX message_created: ids for register + PUT /messages"
       );
 
       if (!chatId || !messageId) {
@@ -175,7 +177,7 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
         return reply.code(502).send({ ok: false, error: reg.error ?? "register failed" });
       }
 
-      request.log.info({ postId: reg.id, chatId, messageId }, "internal register ok");
+      request.log.info({ postId: reg.id, chatId, maxPutMessageId: messageId }, "internal register ok (maxMessageId persisted)");
 
       const synced = await postInternalSyncButton(apiBaseUrl, reg.id, request.log);
       if (!synced) {

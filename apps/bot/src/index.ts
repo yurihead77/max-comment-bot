@@ -66,20 +66,26 @@ async function bootstrap() {
       buttonText: string;
     };
 
+    const mid = typeof body.messageId === "string" ? body.messageId.trim() : "";
+    if (!mid) {
+      app.log.warn({ postId: body.postId }, "internal sync-button rejected: empty messageId (register must store MAX message.body.mid)");
+      return reply.code(400).send({ ok: false, error: "empty messageId" });
+    }
+
     if (env.BOT_MOCK_MAX_API && env.NODE_ENV === "development") {
       app.log.info({ postId: body.postId }, "BOT_MOCK_MAX_API: skip real MAX PUT /messages");
       return reply.send({ ok: true, mocked: true });
     }
 
     const startParam = `post_${body.postId}`;
-    const maxApiTargetUrl = maxClient.putMessagesUrl(body.messageId);
+    const maxApiTargetUrl = maxClient.putMessagesUrl(mid);
 
     app.log.info(
       {
         route: "/internal/sync-button",
         postId: body.postId,
         chatId: body.chatId,
-        messageId: body.messageId,
+        messageId: mid,
         buttonText: body.buttonText,
         startParam,
         maxApiMethod: "PUT /messages",
@@ -94,7 +100,7 @@ async function bootstrap() {
     try {
       await maxClient.editDiscussButton({
         chatId: body.chatId,
-        messageId: body.messageId,
+        messageId: mid,
         buttonText: body.buttonText,
         startParam
       });
@@ -106,7 +112,7 @@ async function bootstrap() {
             route: "/internal/sync-button",
             postId: body.postId,
             chatId: body.chatId,
-            messageId: body.messageId,
+            messageId: mid,
             err: e.message,
             maxApiUrlRedacted: redactBotTokenInUrl(e.url, env.MAX_BOT_TOKEN),
             status: e.status,
@@ -130,8 +136,24 @@ async function bootstrap() {
 
   app.post("/internal/publish", async (request, reply) => {
     const body = request.body as { postId: string; chatId: string; text: string };
-    const result = await postPublisher.publishPost(body);
-    return reply.send(result);
+    try {
+      const result = await postPublisher.publishPost(body);
+      request.log.info(
+        {
+          route: "/internal/publish",
+          postId: body.postId,
+          chatId: body.chatId,
+          maxPutMessageId: result.messageId,
+          maxPutMessageIdLen: result.messageId.length
+        },
+        "internal publish: id from MAX POST /messages (same value register persists for PUT /messages)"
+      );
+      return reply.send(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      request.log.error({ err: msg, postId: body.postId, chatId: body.chatId }, "internal publish failed");
+      return reply.code(502).send({ ok: false, error: msg });
+    }
   });
 
   if (env.NODE_ENV === "development") {

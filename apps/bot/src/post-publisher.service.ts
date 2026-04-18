@@ -1,4 +1,5 @@
 import { getDiscussButtonText } from "./button-text.service";
+import { extractMessageIdFromMessagesApiResponse, truncateJson } from "./max-webhook-payload";
 import { MaxClient } from "./max-client";
 
 interface PublishArgs {
@@ -21,12 +22,12 @@ export class PostPublisherService {
       startParam,
       buttonText: getDiscussButtonText(0)
     })) as Record<string, unknown>;
-    const msg =
-      published.message && typeof published.message === "object"
-        ? (published.message as Record<string, unknown>)
-        : undefined;
-    const body = msg?.body && typeof msg.body === "object" ? (msg.body as Record<string, unknown>) : undefined;
-    const messageId = String(body?.mid ?? "");
+    const messageId = extractMessageIdFromMessagesApiResponse(published) ?? "";
+    if (!messageId) {
+      throw new Error(
+        `publishPost: no message id in MAX POST /messages response (need message.body.mid): ${truncateJson(published, 2500)}`
+      );
+    }
     await fetch(`${this.apiBaseUrl}/api/internal/posts/register`, {
       method: "POST",
       headers: { "content-type": "application/json" },

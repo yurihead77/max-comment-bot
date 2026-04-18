@@ -33,20 +33,21 @@
 }
 ```
 
-Также поддерживается форма с **`message.chat.id`** и текстом на корне сообщения (как в части webhook’ов MAX):
+Идентификатор для **`PUT /messages?message_id=…`** в MAX совпадает с **`Message.body.mid`** (часто дублируется как **`mid`** на корне `message`). Экстрактор **`extractMessageIdFromMessage`** сначала берёт **`body.mid`**, затем fallbacks (`mid`, `message_id`, …), чтобы тестовый **`message_id": "123"`** не перекрывал реальный **`body.mid`**.
+
+Пример с **`body.mid`** (ближе к прод-ответу MAX):
 
 ```json
 {
   "update_type": "message_created",
   "message": {
-    "message_id": "123",
     "chat": { "id": "456" },
-    "text": "test"
+    "body": { "mid": "<реальный-id-из-MAX>", "text": "test" }
   }
 }
 ```
 
-Реальные имена полей могут отличаться (`recipient.chat`, `mid` в `body`, и т.д.). Экстракторы в **`apps/bot/src/max-webhook-payload.ts`**; при неудаче — лог **`message_created_skipped`** и `messageSample`.
+Реальные имена полей могут отличаться (`recipient.chat`, и т.д.). Экстракторы в **`apps/bot/src/max-webhook-payload.ts`**; при неудаче — лог **`message_created_skipped`** и `messageSample`.
 
 ### Какие события ожидать
 
@@ -93,15 +94,17 @@ curl -sS "https://commentbot.volkovyskii.ru/healthz"
 
 Ожидание: JSON с `"ok":true`.
 
-### 2) Webhook без секрета (проверка логов «unsupported»)
+### 2) Webhook без секрета (проверка логов)
 
 ```bash
 curl -sS -X POST "https://commentbot.volkovyskii.ru/webhook/max" \
   -H "Content-Type: application/json" \
-  -d '{"update_type":"message_created","timestamp":1,"message":{"recipient":{"chat_id":-1},"mid":"test-1","body":{"text":"hello"}}}'
+  -d '{"update_type":"message_created","timestamp":1,"message":{"recipient":{"chat_id":-1},"body":{"mid":"smoke-webhook-mid-1","text":"hello"}}}'
 ```
 
-Ожидание: **200**, в ответе поля `handled`, при успешном API — `postId` и `syncButton`. В логах бота — блок **`MAX webhook received`** и **`parsed message_created identifiers`**.
+Ожидание: **200**, в ответе `handled`, при успешном API — `postId` и `syncButton`. В логах бота — **`MAX webhook received`**, **`maxPutMessageId`** (то же значение уйдёт в **`PUT /messages`**).
+
+**Важно:** значение вроде **`"123"`** или **`smoke-webhook-mid-1`** не существует в MAX — **`sync-button`** вызовет реальный **`PUT /messages`** и MAX вернёт **400** `Invalid message_id`. Для проверки **успешного** PUT либо скопируйте **`body.mid`** из реального webhook (лог **`bodyPreview`** / **`maxPutMessageId`**), либо сначала опубликуйте пост через **`/internal/publish`** и возьмите **`messageId`** из JSON-ответа (см. п. 6).
 
 ### 3) Webhook с секретом
 
@@ -114,7 +117,7 @@ curl -sS -X POST "https://commentbot.volkovyskii.ru/webhook/max" \
 
 Если `MAX_WEBHOOK_SECRET` задан на сервере, без заголовка или с неверным значением — **401**.
 
-### 4) Регистрация поста напрямую в API (минуя формат MAX)
+### 4) Регистрация поста напрямую в API (минуя MAX)
 
 ```bash
 curl -sS -X POST "http://127.0.0.1:3001/api/internal/posts/register" \
@@ -122,15 +125,21 @@ curl -sS -X POST "http://127.0.0.1:3001/api/internal/posts/register" \
   -d '{"chatId":"smoke-chat-1","messageId":"manual-1","botMessageText":"manual"}'
 ```
 
-Ожидание: `{"id":"<uuid>"}`.
+Ожидание: `{"id":"<uuid>"}`. Поле **`messageId`** здесь — это **`maxMessageId`** в БД; для **живого** MAX оно должно быть **реальным** `mid` из сообщения, иначе шаг 5 даст **502** / в логах бота — **400** от MAX.
 
-### 5) Sync-button через API
+### 5) Sync-button через API (нужен реальный `mid` в БД)
 
 ```bash
 curl -sS -X POST "http://127.0.0.1:3001/api/internal/posts/<POST_ID>/sync-button"
 ```
 
-Ожидание: `{"ok":true}`. В логах бота — вызов **`/internal/sync-button`** и успешный ответ MAX на **`PUT /messages`** (если не включён `BOT_MOCK_MAX_API` в development).
+Ожидание: `{"ok":true}` только если в посте сохранён существующий в MAX **`message_id`** (= **`body.mid`**). В логах **API** — **`sync-button: POST bot`** с **`maxPutMessageId`**; в логах **бота** — **`/internal/sync-button`** и ответ MAX на **`PUT /messages`**. В development можно включить **`BOT_MOCK_MAX_API=true`**, чтобы не дергать MAX с фиктивным id.
+
+### 6) Полный корректный смок: publish → реальный `messageId` → sync
+
+1. Вызов **`POST`** на бота **`/internal/publish`** с реальным **`chatId`** канала и текстом (как в вашем сценарии деплоя).
+2. В ответе возьмите **`messageId`** — это уже id из ответа **`POST /messages`** MAX (тот же, что для **`PUT`**).
+3. При необходимости вызовите **`POST …/sync-button`** для того же поста — MAX примет **`message_id`**, если он совпадает с опубликованным сообщением.
 
 ### Ошибка `Unexpected token '<'` / HTML вместо JSON
 
