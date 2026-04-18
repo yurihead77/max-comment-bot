@@ -53,7 +53,7 @@ cd apps/bot
 node --env-file=../api/.env dist/index.js
 ```
 
-6. **Mini app / admin (Vite dev)** — optional `VITE_API_BASE_URL` and dev-mock flags:
+6. **Mini app / admin (Vite dev)** — `VITE_API_BASE_URL` (see `.env.example`) and dev-mock flags. For **production static builds**, set `VITE_API_BASE_URL` to the public API URL in CI, or omit it only if the API is served **same origin** as the static app (see `DEPLOYMENT.md`); do not rely on a `localhost` default in the browser.
 
 ```bash
 cp apps/miniapp/.env.example apps/miniapp/.env

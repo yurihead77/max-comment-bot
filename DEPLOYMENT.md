@@ -15,6 +15,8 @@
 - `apps/miniapp` static build behind Nginx
 - `apps/admin` static build behind Nginx
 
+**Mini app and admin (Vite):** set **`VITE_API_BASE_URL`** to the **browser-visible** API origin for every production build (CI/CD env or `.env.production`). If it is missing at build time, the bundle defaults to relative URLs (`""` / same origin as the static site). That only works when Nginx serves the API on the **same host and scheme** as the mini app or admin (e.g. both under `https://example.com` with `/api` proxied). Do **not** bake in `http://localhost:3001` for production: the browser would call the user’s machine, not your server, and HTTPS pages would hit mixed content.
+
 ## Build and database
 
 ```bash

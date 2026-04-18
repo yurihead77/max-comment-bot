@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export async function authByInitData(initData: string) {
   const response = await fetch(`${API_BASE}/api/auth/max/init`, {
