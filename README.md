@@ -118,7 +118,7 @@ pnpm run build
 pnpm run smoke:functional
 ```
 
-Перед этим один раз создайте `apps/api/.env` (например из `.env.example`) с рабочим `DATABASE_URL` и секретами.
+Перед этим один раз создайте `apps/api/.env` (например из **`.env.example`** или **`apps/api/.env.example`**) с рабочим **`DATABASE_URL`**: на PostgreSQL должна существовать БД с именем из URL (по умолчанию **`max_comment_bot`**). Иначе API не поднимется (**Prisma P1003**), порт **3001** не слушается.
 
 ## Публичные URL загрузок и Nginx
 

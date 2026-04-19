@@ -19,6 +19,24 @@
 
 ## Build and database
 
+### PostgreSQL and `DATABASE_URL`
+
+Prisma reads **`DATABASE_URL`** from the process environment (see `apps/api/prisma/schema.prisma`). The **database name** in the URL path (segment after the last `/` before `?`) must **already exist** on the server. If it does not, the API exits on startup with **`PrismaClientInitializationError` / `P1003`** (`Database '…' does not exist`) and nothing listens on **`API_PORT`** — the bot then sees **`fetch failed`** to `http://127.0.0.1:3001`.
+
+This repo’s **default** database name is **`max_comment_bot`** (see root **`.env.example`** and **`apps/api/.env.example`**). A URL ending in **`/comments`** is **not** defined by the codebase; it usually comes from a hand-edited **`.env`** / **`.env.production`**. Either **create** a database named `comments` or, preferably, **point `DATABASE_URL` at `max_comment_bot`** and create that DB.
+
+Create the default database (Linux, user `postgres`; adjust host/user/password):
+
+```bash
+# psql
+psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE max_comment_bot;"
+
+# or createdb
+createdb -h 127.0.0.1 -U postgres max_comment_bot
+```
+
+Then from the repo root:
+
 ```bash
 pnpm install --frozen-lockfile
 pnpm db:generate
@@ -77,6 +95,8 @@ Pick one (or combine) so the Node process inherits variables before `node` start
 | **Docker** | `ENV` / `environment:` in Compose, or `env_file:` pointing at a file mounted into the container. |
 
 Use one canonical env source for API and bot (bot only needs the subset it reads; sharing one file is fine).
+
+**`DATABASE_URL` in production:** the same rules as in [Build and database](#postgresql-and-database_url) apply. If **`/opt/max-comment-bot/.env.production`** (or PM2 env) still points at a non-existent database name (e.g. **`comments`**), the API will crash on Prisma connect (**P1003**) and never bind **`API_PORT`**. Align the name with **`max_comment_bot`** (or whatever DB you created) and restart.
 
 **Examples**
 
