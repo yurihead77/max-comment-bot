@@ -167,6 +167,7 @@ curl -sS -G -X DELETE "$BASE/subscriptions" \
 | `MAX_WEBHOOK_URL` | Полный публичный URL **`POST /webhook/max`** для CLI **`pnpm webhook:subscribe`** / **`resubscribe`** (не путать с `MAX_WEBAPP_URL`). |
 | `ENV_FILE` | Только для CLI **`pnpm webhook:*`**: абсолютный или относительный (**от `cwd`**) путь к одному env-файлу; при задании merge из репозитория **не** выполняется. |
 | `BOT_INTERNAL_BASE_URL` | На стороне **API** — URL бота для вызова `/internal/sync-button` (см. `apps/api` env). |
+| `MAX_WEBAPP_URL` | URL мини-приложения в кнопке **`open_app`** (`web_app`); должен совпадать с link в MAX (см. выше). |
 
 ## Ручная проверка (curl)
 
@@ -230,6 +231,10 @@ curl -sS -X POST "http://127.0.0.1:3001/api/internal/posts/<POST_ID>/sync-button
 ### Ошибка `Unexpected token '<'` / HTML вместо JSON
 
 Официальный Bot API MAX: **`https://platform-api.max.ru/messages`** с заголовком **`Authorization: <bot token>`** и query **`v=<версия>`** (см. [dev.max.ru/docs-api](https://dev.max.ru/docs-api)). Путей вида **`/bot<token>/sendMessage`** на этом хосте **нет** — часто отдаётся **404 HTML**. Задайте **`MAX_API_BASE_URL=https://platform-api.max.ru`**. **`MAX_WEBAPP_URL`** — только URL мини-приложения в поле **`web_app`** кнопки, не база для `fetch`.
+
+### Ошибка MAX `Link not found` / `not.found` на `PUT /messages`
+
+Если **`message_id`** верный, а ответ **404** с текстом вроде **`LinkPK{name='https://…', space=TAMTAM}`**, платформа не нашла **зарегистрированный link** для строки в **`open_app.web_app`**. Значение **`MAX_WEBAPP_URL`** должно **совпадать с URL мини-приложения в кабинете MAX** (включая путь; см. **`normalizeWebAppUrl`** в боте и раздел в **`docs/max-integration-manual.md`**). В логах ищите **`maxOpenAppOutgoing`** и поле **`webAppUrl`**.
 
 ## Как снять реальный payload с прод-сервера
 

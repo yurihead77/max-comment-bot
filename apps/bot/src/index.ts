@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { z } from "zod";
 import { runDevPolling } from "./dev-polling";
 import { MaxApiError, MaxClient } from "./max-client";
+import { normalizeWebAppUrl } from "./normalize-web-app-url";
 
 function redactBotTokenInUrl(url: string, token: string): string {
   if (!token || !url.includes(token)) return url;
@@ -23,7 +24,10 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v && v.trim().length > 0 ? v.trim() : "1.2.5")),
-  MAX_WEBAPP_URL: z.string().url(),
+  MAX_WEBAPP_URL: z
+    .string()
+    .url()
+    .transform((s) => normalizeWebAppUrl(s)),
   API_PORT: z.coerce.number().default(3001),
   /** Base URL the bot uses to call API (register, sync is triggered from API → bot). Same host default; set in Docker/prod. */
   API_INTERNAL_BASE_URL: z.string().url().optional(),
@@ -47,7 +51,10 @@ const apiBaseUrl = env.API_INTERNAL_BASE_URL ?? `http://127.0.0.1:${env.API_PORT
 async function bootstrap() {
   const app = Fastify({ logger: true });
   const maxClient = new MaxClient(env.MAX_BOT_TOKEN, env.MAX_API_BASE_URL, env.MAX_WEBAPP_URL, {
-    apiVersion: env.MAX_API_VERSION
+    apiVersion: env.MAX_API_VERSION,
+    logOpenAppPayload: (meta) => {
+      app.log.info(meta, "MAX messages: outgoing open_app inline_keyboard (web_app must match registered mini app link)");
+    }
   });
   const postPublisher = new PostPublisherService(maxClient, apiBaseUrl);
 
@@ -92,7 +99,14 @@ async function bootstrap() {
         maxApiUrlRedacted: redactBotTokenInUrl(maxApiTargetUrl, env.MAX_BOT_TOKEN),
         maxApiBaseUrl: env.MAX_API_BASE_URL,
         maxApiVersion: env.MAX_API_VERSION,
-        maxWebappUrl: env.MAX_WEBAPP_URL
+        maxWebappUrl: env.MAX_WEBAPP_URL,
+        maxWebappHost: (() => {
+          try {
+            return new URL(env.MAX_WEBAPP_URL).host;
+          } catch {
+            return undefined;
+          }
+        })()
       },
       "internal sync-button: calling MAX API (PUT messages — token in Authorization header only)"
     );
@@ -107,6 +121,9 @@ async function bootstrap() {
       return reply.send({ ok: true });
     } catch (e) {
       if (e instanceof MaxApiError) {
+        const linkNotFound =
+          e.status === 404 &&
+          (e.bodyPreview.includes("Link not found") || e.bodyPreview.includes("not.found"));
         app.log.error(
           {
             route: "/internal/sync-button",
@@ -117,9 +134,17 @@ async function bootstrap() {
             maxApiUrlRedacted: redactBotTokenInUrl(e.url, env.MAX_BOT_TOKEN),
             status: e.status,
             contentType: e.contentType,
-            bodyPreview: e.bodyPreview
+            bodyPreview: e.bodyPreview,
+            ...(linkNotFound
+              ? {
+                  maxWebappUrlUsed: env.MAX_WEBAPP_URL,
+                  hint: "MAX looks up `web_app` against the mini app link registered for the bot; it must match exactly (path, https, no stray slash). See docs/max-integration-manual.md."
+                }
+              : {})
           },
-          "MAX PUT /messages failed (non-JSON or HTTP error — use MAX_API_BASE_URL=https://platform-api.max.ru per dev.max.ru)"
+          linkNotFound
+            ? "MAX PUT /messages: Link not found for open_app.web_app (check MAX_WEBAPP_URL vs MAX developer UI)"
+            : "MAX PUT /messages failed (non-JSON or HTTP error — use MAX_API_BASE_URL=https://platform-api.max.ru per dev.max.ru)"
         );
         return reply.code(502).send({
           ok: false,

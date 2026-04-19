@@ -9,6 +9,20 @@
 - Webhook бота на HTTPS URL, доступный из MAX (формат тел, секрет, curl: [webhook-max.md](webhook-max.md)).
 - API и бот запущены (`start:prod`), БД с миграциями и seed.
 
+### `MAX_WEBAPP_URL` и кнопка `open_app` (ошибка `Link not found`)
+
+Поле **`web_app`** в кнопке **`type: "open_app"`** — это **строка URL** мини-приложения в том же формате, что в официальной Go-схеме [`OpenAppButton`](https://github.com/max-messenger/max-bot-api-client-go/blob/main/schemes/schemes.go) (поле **`WebApp`** с JSON-тегом **`web_app`**). Оно **не** подменяется на объект вида `{ url: "…" }`.
+
+Платформа MAX ищет этот URL в реестре **Link** (в логах ошибки встречается `LinkPK{name='…', space=TAMTAM}`). Если ссылка **не совпадает 1:1** с тем, что зарегистрировано для бота/мини-приложения в кабинете MAX, **`PUT /messages`** / **`POST /messages`** вернут **404** `not.found` / `Link not found`.
+
+На что смотреть:
+
+- **Полный URL с путём**: если в MAX указано `https://host/miniapp`, а в env — только `https://host`, lookup не найдёт link (и наоборот).
+- **Слеш в конце корня** (`https://host/` vs `https://host`) и **регистр хоста** — бот при старте приводит URL к каноническому виду через **`normalizeWebAppUrl`** (см. `apps/bot/src/normalize-web-app-url.ts`), но **путь и схема должны совпадать с кабинетом**.
+- **HTTPS**, без редиректа на другой origin для открытия приложения.
+
+В логах бота при каждом **`POST /messages`** / **`PUT /messages`** с клавиатурой пишется событие с превью JSON (**`maxOpenAppOutgoing`**, **`webAppUrl`**, **`attachmentsJsonPreview`**). Сравните **`webAppUrl`** с тем, что видно в настройках мини-приложения MAX.
+
 ## Сценарий
 
 1. **Publish post**  

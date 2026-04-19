@@ -12,6 +12,14 @@ export interface SyncButtonPayload {
   startParam: string;
 }
 
+export type MaxClientLogOpenAppPayload = (meta: Record<string, unknown>) => void;
+
+export interface MaxClientOptions {
+  apiVersion?: string;
+  /** Structured log of outgoing `open_app` keyboard JSON (POST/PUT messages). */
+  logOpenAppPayload?: MaxClientLogOpenAppPayload;
+}
+
 /** Thrown when MAX HTTP API returns non-JSON, error status, or unreadable body. */
 export class MaxApiError extends Error {
   constructor(
@@ -94,16 +102,18 @@ function assertMaxCommandSuccess(
  */
 export class MaxClient {
   private readonly apiVersion: string;
+  private readonly logOpenAppPayload?: MaxClientLogOpenAppPayload;
 
   constructor(
     private readonly token: string,
     /** API origin, e.g. https://platform-api.max.ru (not the mini app site). */
     private readonly baseUrl: string,
-    /** Mini app URL for `open_app` button (`web_app` field); not used as fetch base URL. */
+    /** Mini app URL for `open_app` button (`web_app` string); must match link registered in MAX (see normalizeWebAppUrl at call site). */
     private readonly webAppUrl: string,
-    opts?: { apiVersion?: string }
+    opts?: MaxClientOptions
   ) {
     this.apiVersion = opts?.apiVersion ?? "1.2.5";
+    this.logOpenAppPayload = opts?.logOpenAppPayload;
   }
 
   /** Diagnostic: POST /messages?chat_id=…&v=… (token only in Authorization header). */
@@ -126,7 +136,7 @@ export class MaxClient {
     return u.toString();
   }
 
-  /** MAX inline_keyboard + open_app (see max-bot-api-client-go schemes). */
+  /** MAX inline_keyboard + open_app (see max-bot-api-client-go `OpenAppButton`, `web_app` string). */
   private openAppKeyboardAttachment(buttonText: string, startParam: string) {
     return {
       type: "inline_keyboard",
@@ -143,6 +153,27 @@ export class MaxClient {
         ]
       }
     };
+  }
+
+  private logOpenAppOutbound(operation: string, body: unknown, buttonText: string, startParam: string): void {
+    if (!this.logOpenAppPayload) return;
+    let host: string | undefined;
+    try {
+      host = new URL(this.webAppUrl).host;
+    } catch {
+      host = undefined;
+    }
+    const serialized = JSON.stringify(body);
+    this.logOpenAppPayload({
+      maxOpenAppOutgoing: true,
+      operation,
+      buttonText,
+      startParam,
+      webAppUrl: this.webAppUrl,
+      webAppHost: host,
+      attachmentsJsonPreview: serialized.slice(0, 16_000),
+      attachmentsJsonLen: serialized.length
+    });
   }
 
   private async maxJsonFetch(method: "POST" | "PUT", url: string, body: unknown): Promise<unknown> {
@@ -166,6 +197,7 @@ export class MaxClient {
       text: payload.text,
       attachments: [this.openAppKeyboardAttachment(payload.buttonText, payload.startParam)]
     };
+    this.logOpenAppOutbound("POST /messages", body, payload.buttonText, payload.startParam);
     return this.maxJsonFetch("POST", url, body);
   }
 
@@ -178,6 +210,7 @@ export class MaxClient {
     const body = {
       attachments: [this.openAppKeyboardAttachment(payload.buttonText, payload.startParam)]
     };
+    this.logOpenAppOutbound("PUT /messages", body, payload.buttonText, payload.startParam);
     return this.maxJsonFetch("PUT", url, body);
   }
 }
