@@ -9,7 +9,7 @@
     "start": "node dist/index.js",
     "start:prod": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/max-webhook-payload.test.ts src/normalize-web-app-url.test.ts",
+    "test": "node --import tsx --test src/max-webhook-payload.test.ts src/normalize-web-app-url.test.ts src/max-inline-discuss-keyboard.test.ts src/max-bot-token-fingerprint.test.ts",
     "lint": "echo \"no lint configured\"",
     "webhook:list": "tsx scripts/max-webhook-subscriptions.ts list",
     "webhook:subscribe": "tsx scripts/max-webhook-subscriptions.ts subscribe",

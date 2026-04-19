@@ -1,3 +1,5 @@
+import { buildDiscussInlineKeyboardAttachment, type MaxDiscussInlineMode } from "./max-inline-discuss-keyboard";
+
 export interface PublishPostPayload {
   chatId: string;
   text: string;
@@ -16,8 +18,13 @@ export type MaxClientLogOpenAppPayload = (meta: Record<string, unknown>) => void
 
 export interface MaxClientOptions {
   apiVersion?: string;
-  /** Structured log of outgoing `open_app` keyboard JSON (POST/PUT messages). */
+  /** Structured log of outgoing discuss inline_keyboard JSON (POST/PUT messages). */
   logOpenAppPayload?: MaxClientLogOpenAppPayload;
+  /**
+   * Diagnostic: `link` sends a normal URL button to the same `targetUrl` as `open_app.web_app`,
+   * to compare MAX behaviour (link registry vs mini app link registry).
+   */
+  discussInlineMode?: MaxDiscussInlineMode;
 }
 
 /** Thrown when MAX HTTP API returns non-JSON, error status, or unreadable body. */
@@ -95,6 +102,17 @@ function assertMaxCommandSuccess(
   }
 }
 
+export type MaxDebugPutResult = {
+  url: string;
+  httpOk: boolean;
+  status: number;
+  contentType: string | null;
+  /** Truncated raw response body for logs. */
+  responseBodyPreview: string;
+  parsed?: unknown;
+  maxSuccessFalseMessage?: string;
+};
+
 /**
  * MAX Bot HTTP API (see https://dev.max.ru/docs-api).
  * Uses `POST /messages` + `PUT /messages?message_id=…` with `Authorization: <token>` and query `v=<api version>`.
@@ -103,17 +121,19 @@ function assertMaxCommandSuccess(
 export class MaxClient {
   private readonly apiVersion: string;
   private readonly logOpenAppPayload?: MaxClientLogOpenAppPayload;
+  private readonly discussInlineMode: MaxDiscussInlineMode;
 
   constructor(
     private readonly token: string,
     /** API origin, e.g. https://platform-api.max.ru (not the mini app site). */
     private readonly baseUrl: string,
-    /** Mini app URL for `open_app` button (`web_app` string); must match link registered in MAX (see normalizeWebAppUrl at call site). */
+    /** Mini app URL for `open_app` (`web_app`); same string used as `url` for diagnostic `link` mode. */
     private readonly webAppUrl: string,
     opts?: MaxClientOptions
   ) {
     this.apiVersion = opts?.apiVersion ?? "1.2.5";
     this.logOpenAppPayload = opts?.logOpenAppPayload;
+    this.discussInlineMode = opts?.discussInlineMode ?? "open_app";
   }
 
   /** Diagnostic: POST /messages?chat_id=…&v=… (token only in Authorization header). */
@@ -136,26 +156,16 @@ export class MaxClient {
     return u.toString();
   }
 
-  /** MAX inline_keyboard + open_app (see max-bot-api-client-go `OpenAppButton`, `web_app` string). */
-  private openAppKeyboardAttachment(buttonText: string, startParam: string) {
-    return {
-      type: "inline_keyboard",
-      payload: {
-        buttons: [
-          [
-            {
-              type: "open_app",
-              text: buttonText,
-              web_app: this.webAppUrl,
-              payload: startParam
-            }
-          ]
-        ]
-      }
-    };
+  private discussKeyboardAttachment(buttonText: string, startParam: string) {
+    return buildDiscussInlineKeyboardAttachment({
+      mode: this.discussInlineMode,
+      targetUrl: this.webAppUrl,
+      buttonText,
+      startParam
+    });
   }
 
-  private logOpenAppOutbound(operation: string, body: unknown, buttonText: string, startParam: string): void {
+  private logDiscussOutbound(operation: string, body: unknown, buttonText: string, startParam: string): void {
     if (!this.logOpenAppPayload) return;
     let host: string | undefined;
     try {
@@ -164,9 +174,12 @@ export class MaxClient {
       host = undefined;
     }
     const serialized = JSON.stringify(body);
+    const firstBtn = this.discussInlineMode === "open_app" ? "open_app" : "link";
     this.logOpenAppPayload({
-      maxOpenAppOutgoing: true,
+      maxDiscussInlineOutgoing: true,
       operation,
+      discussInlineMode: this.discussInlineMode,
+      inlineButtonType: firstBtn,
       buttonText,
       startParam,
       webAppUrl: this.webAppUrl,
@@ -191,13 +204,69 @@ export class MaxClient {
     return parsed;
   }
 
+  /**
+   * PUT /messages with a single-row keyboard for diagnostics.
+   * Does not throw on HTTP errors — returns status and body preview for comparison (open_app vs link).
+   */
+  async debugPutMessagesSingleButton(args: {
+    messageId: string;
+    mode: MaxDiscussInlineMode;
+    buttonText: string;
+    startParam: string;
+    /** For `link` mode; defaults to `webAppUrl` when omitted. */
+    linkTargetUrl?: string;
+  }): Promise<MaxDebugPutResult> {
+    const url = this.buildMessagesUrl({ message_id: args.messageId });
+    const targetUrl =
+      args.mode === "link" ? (args.linkTargetUrl ?? this.webAppUrl) : this.webAppUrl;
+    const body = {
+      attachments: [
+        buildDiscussInlineKeyboardAttachment({
+          mode: args.mode,
+          targetUrl,
+          buttonText: args.buttonText,
+          startParam: args.startParam
+        })
+      ]
+    };
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: this.token,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    const text = await response.text();
+    const preview = text.slice(0, 16_000);
+    let parsed: unknown = undefined;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      // leave parsed undefined
+    }
+    let maxSuccessFalseMessage: string | undefined;
+    if (parsed && typeof parsed === "object" && "success" in parsed && (parsed as { success: unknown }).success === false) {
+      maxSuccessFalseMessage = String((parsed as { message?: unknown }).message ?? "");
+    }
+    return {
+      url,
+      httpOk: response.ok,
+      status: response.status,
+      contentType: response.headers.get("content-type"),
+      responseBodyPreview: preview,
+      parsed,
+      maxSuccessFalseMessage
+    };
+  }
+
   async publishPost(payload: PublishPostPayload) {
     const url = this.buildMessagesUrl({ chat_id: payload.chatId });
     const body = {
       text: payload.text,
-      attachments: [this.openAppKeyboardAttachment(payload.buttonText, payload.startParam)]
+      attachments: [this.discussKeyboardAttachment(payload.buttonText, payload.startParam)]
     };
-    this.logOpenAppOutbound("POST /messages", body, payload.buttonText, payload.startParam);
+    this.logDiscussOutbound("POST /messages", body, payload.buttonText, payload.startParam);
     return this.maxJsonFetch("POST", url, body);
   }
 
@@ -208,9 +277,9 @@ export class MaxClient {
   async editDiscussButton(payload: SyncButtonPayload) {
     const url = this.buildMessagesUrl({ message_id: payload.messageId });
     const body = {
-      attachments: [this.openAppKeyboardAttachment(payload.buttonText, payload.startParam)]
+      attachments: [this.discussKeyboardAttachment(payload.buttonText, payload.startParam)]
     };
-    this.logOpenAppOutbound("PUT /messages", body, payload.buttonText, payload.startParam);
+    this.logDiscussOutbound("PUT /messages", body, payload.buttonText, payload.startParam);
     return this.maxJsonFetch("PUT", url, body);
   }
 }

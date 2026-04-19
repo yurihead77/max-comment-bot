@@ -2,15 +2,17 @@ import dotenv from "dotenv";
 import Fastify from "fastify";
 import { z } from "zod";
 import { runDevPolling } from "./dev-polling";
+import { maxBotTokenSha256Prefix } from "./max-bot-token-fingerprint";
+import { buildDiscussInlineKeyboardAttachment } from "./max-inline-discuss-keyboard";
 import { MaxApiError, MaxClient } from "./max-client";
 import { normalizeWebAppUrl } from "./normalize-web-app-url";
+import { PostPublisherService } from "./post-publisher.service";
+import { webhookRoutes } from "./webhook.routes";
 
 function redactBotTokenInUrl(url: string, token: string): string {
   if (!token || !url.includes(token)) return url;
   return url.split(token).join("***");
 }
-import { PostPublisherService } from "./post-publisher.service";
-import { webhookRoutes } from "./webhook.routes";
 
 dotenv.config();
 
@@ -28,6 +30,18 @@ const envSchema = z.object({
     .string()
     .url()
     .transform((s) => normalizeWebAppUrl(s)),
+  /**
+   * Diagnostic only: `link` uses inline `url` button to the same `MAX_WEBAPP_URL` instead of `open_app`.
+   * Does not change webhook/register code paths — only keyboard JSON for publish + sync-button.
+   */
+  MAX_OPEN_APP_DEBUG_MODE: z
+    .string()
+    .optional()
+    .transform((v) => {
+      const t = v?.trim().toLowerCase();
+      if (t === "link") return "link" as const;
+      return "open_app" as const;
+    }),
   API_PORT: z.coerce.number().default(3001),
   /** Base URL the bot uses to call API (register, sync is triggered from API → bot). Same host default; set in Docker/prod. */
   API_INTERNAL_BASE_URL: z.string().url().optional(),
@@ -42,6 +56,14 @@ const envSchema = z.object({
 
 const env = envSchema.parse(process.env);
 
+const debugPutMessagesBodySchema = z.object({
+  messageId: z.string().min(1),
+  buttonType: z.enum(["open_app", "link"]),
+  buttonText: z.string().min(1).max(128).optional().default("Debug"),
+  startParam: z.string().max(512).optional().default("debug_put"),
+  linkUrl: z.string().url().optional()
+});
+
 if (env.NODE_ENV === "production" && env.BOT_MOCK_MAX_API) {
   throw new Error("BOT_MOCK_MAX_API cannot be enabled in production");
 }
@@ -52,10 +74,22 @@ async function bootstrap() {
   const app = Fastify({ logger: true });
   const maxClient = new MaxClient(env.MAX_BOT_TOKEN, env.MAX_API_BASE_URL, env.MAX_WEBAPP_URL, {
     apiVersion: env.MAX_API_VERSION,
+    discussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
     logOpenAppPayload: (meta) => {
-      app.log.info(meta, "MAX messages: outgoing open_app inline_keyboard (web_app must match registered mini app link)");
+      app.log.info(meta, "MAX messages: outgoing discuss inline_keyboard (see discussInlineMode / inlineButtonType)");
     }
   });
+
+  app.log.info(
+    {
+      maxDiscussDiagBootstrap: true,
+      maxBotTokenSha256Prefix: maxBotTokenSha256Prefix(env.MAX_BOT_TOKEN),
+      maxWebappUrlNormalized: env.MAX_WEBAPP_URL,
+      discussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
+      inlineButtonType: env.MAX_OPEN_APP_DEBUG_MODE === "link" ? "link" : "open_app"
+    },
+    "MAX discuss diagnostics: env snapshot at bot startup"
+  );
   const postPublisher = new PostPublisherService(maxClient, apiBaseUrl);
 
   app.get("/healthz", async () => ({ ok: true }));
@@ -87,6 +121,17 @@ async function bootstrap() {
     const startParam = `post_${body.postId}`;
     const maxApiTargetUrl = maxClient.putMessagesUrl(mid);
 
+    const syncPutPayloadPreview = JSON.stringify({
+      attachments: [
+        buildDiscussInlineKeyboardAttachment({
+          mode: env.MAX_OPEN_APP_DEBUG_MODE,
+          targetUrl: env.MAX_WEBAPP_URL,
+          buttonText: body.buttonText,
+          startParam
+        })
+      ]
+    }).slice(0, 16_000);
+
     app.log.info(
       {
         route: "/internal/sync-button",
@@ -99,7 +144,11 @@ async function bootstrap() {
         maxApiUrlRedacted: redactBotTokenInUrl(maxApiTargetUrl, env.MAX_BOT_TOKEN),
         maxApiBaseUrl: env.MAX_API_BASE_URL,
         maxApiVersion: env.MAX_API_VERSION,
-        maxWebappUrl: env.MAX_WEBAPP_URL,
+        maxBotTokenSha256Prefix: maxBotTokenSha256Prefix(env.MAX_BOT_TOKEN),
+        maxWebappUrlNormalized: env.MAX_WEBAPP_URL,
+        discussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
+        inlineButtonType: env.MAX_OPEN_APP_DEBUG_MODE === "link" ? "link" : "open_app",
+        putRequestPayloadPreview: syncPutPayloadPreview,
         maxWebappHost: (() => {
           try {
             return new URL(env.MAX_WEBAPP_URL).host;
@@ -135,15 +184,25 @@ async function bootstrap() {
             status: e.status,
             contentType: e.contentType,
             bodyPreview: e.bodyPreview,
+            maxBotTokenSha256Prefix: maxBotTokenSha256Prefix(env.MAX_BOT_TOKEN),
+            maxWebappUrlNormalized: env.MAX_WEBAPP_URL,
+            discussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
+            inlineButtonType: env.MAX_OPEN_APP_DEBUG_MODE === "link" ? "link" : "open_app",
+            putRequestPayloadPreview: syncPutPayloadPreview,
             ...(linkNotFound
               ? {
                   maxWebappUrlUsed: env.MAX_WEBAPP_URL,
-                  hint: "MAX looks up `web_app` against the mini app link registered for the bot; it must match exactly (path, https, no stray slash). See docs/max-integration-manual.md."
+                  hint:
+                    env.MAX_OPEN_APP_DEBUG_MODE === "link"
+                      ? "404 with type=link — not the open_app mini app registry path; see docs/max-open-app-debug.md."
+                      : "MAX looks up `web_app` against the mini app link registered for the bot; it must match exactly (path, https, no stray slash). See docs/max-integration-manual.md and docs/max-open-app-debug.md."
                 }
               : {})
           },
           linkNotFound
-            ? "MAX PUT /messages: Link not found for open_app.web_app (check MAX_WEBAPP_URL vs MAX developer UI)"
+            ? env.MAX_OPEN_APP_DEBUG_MODE === "link"
+              ? "MAX PUT /messages: 404 with link button (unexpected for link-only; check message_id/token)"
+              : "MAX PUT /messages: Link not found for open_app.web_app (check MAX_WEBAPP_URL vs MAX developer UI)"
             : "MAX PUT /messages failed (non-JSON or HTTP error — use MAX_API_BASE_URL=https://platform-api.max.ru per dev.max.ru)"
         );
         return reply.code(502).send({
@@ -155,8 +214,90 @@ async function bootstrap() {
         });
       }
       app.log.error({ err: e, postId: body.postId }, "internal sync-button unexpected error");
-      return reply.code(502).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+        return reply.code(502).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
+  });
+
+  app.post("/internal/debug/put-messages-button", async (request, reply) => {
+    const parsed = debugPutMessagesBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+    }
+    const d = parsed.data;
+    const mid = d.messageId.trim();
+
+    if (env.BOT_MOCK_MAX_API && env.NODE_ENV === "development") {
+      request.log.info(
+        { route: "/internal/debug/put-messages-button", mocked: true, messageId: mid, buttonType: d.buttonType },
+        "BOT_MOCK_MAX_API: skip real MAX debug PUT /messages"
+      );
+      return reply.send({ ok: true, mocked: true, messageId: mid, buttonType: d.buttonType });
+    }
+
+    const linkTarget = d.linkUrl ? normalizeWebAppUrl(d.linkUrl) : env.MAX_WEBAPP_URL;
+    const targetUrl = d.buttonType === "link" ? linkTarget : env.MAX_WEBAPP_URL;
+
+    const requestBody = {
+      attachments: [
+        buildDiscussInlineKeyboardAttachment({
+          mode: d.buttonType,
+          targetUrl,
+          buttonText: d.buttonText,
+          startParam: d.startParam
+        })
+      ]
+    };
+    const requestPayloadPreview = JSON.stringify(requestBody).slice(0, 16_000);
+
+    request.log.info(
+      {
+        route: "/internal/debug/put-messages-button",
+        maxBotTokenSha256Prefix: maxBotTokenSha256Prefix(env.MAX_BOT_TOKEN),
+        maxWebappUrlNormalized: env.MAX_WEBAPP_URL,
+        envDiscussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
+        requestButtonType: d.buttonType,
+        messageId: mid,
+        putRequestPayloadPreview: requestPayloadPreview,
+        maxApiUrlRedacted: redactBotTokenInUrl(maxClient.putMessagesUrl(mid), env.MAX_BOT_TOKEN)
+      },
+      "internal debug put-messages-button: before MAX PUT /messages"
+    );
+
+    const result = await maxClient.debugPutMessagesSingleButton({
+      messageId: mid,
+      mode: d.buttonType,
+      buttonText: d.buttonText,
+      startParam: d.startParam,
+      linkTargetUrl: d.buttonType === "link" ? linkTarget : undefined
+    });
+
+    request.log.info(
+      {
+        route: "/internal/debug/put-messages-button",
+        messageId: mid,
+        requestButtonType: d.buttonType,
+        httpOk: result.httpOk,
+        maxApiStatus: result.status,
+        maxSuccessFalseMessage: result.maxSuccessFalseMessage,
+        responseBodyPreview: result.responseBodyPreview.slice(0, 16_000),
+        maxApiUrlRedacted: redactBotTokenInUrl(result.url, env.MAX_BOT_TOKEN)
+      },
+      "internal debug put-messages-button: after MAX PUT /messages"
+    );
+
+    const success = result.httpOk && result.maxSuccessFalseMessage === undefined;
+
+    return reply.send({
+      ok: success,
+      messageId: mid,
+      buttonType: d.buttonType,
+      maxApiStatus: result.status,
+      httpOk: result.httpOk,
+      maxSuccessFalseMessage: result.maxSuccessFalseMessage,
+      requestPayloadPreview,
+      responseBodyPreview: result.responseBodyPreview.slice(0, 16_000),
+      maxApiUrlRedacted: redactBotTokenInUrl(result.url, env.MAX_BOT_TOKEN)
+    });
   });
 
   app.post("/internal/publish", async (request, reply) => {
