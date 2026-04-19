@@ -68,7 +68,7 @@ export const sessionPlugin = fp(async (app) => {
       include: { adminUser: true }
     });
 
-    if (!session || session.expiresAt < new Date() || !session.adminUser.isActive) {
+    if (!session || session.expiresAt < new Date() || !session.adminUser?.isActive) {
       return;
     }
 

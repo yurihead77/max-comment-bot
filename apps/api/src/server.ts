@@ -1,3 +1,4 @@
+import "./process-exception-handlers";
 import { createApp } from "./app";
 import { env } from "./config/env";
 
