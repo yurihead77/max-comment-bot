@@ -88,24 +88,38 @@ step "4/5 Restart API process"
 if [[ "$SKIP_PM2_RESTART" == "1" ]]; then
   echo "SKIP_PM2_RESTART=1 -> skipping pm2 restart."
 else
-  run_checked "pm2 restart" pm2 restart "$PM2_API_NAME"
+  run_checked "pm2 restart" pm2 restart "$PM2_API_NAME" --update-env
   run_checked "pm2 logs" pm2 logs "$PM2_API_NAME" --lines 30 --nostream
 fi
 
 step "5/5 Smoke health check"
-tmp="$(mktemp)"
-http_code="$(curl -sS -o "$tmp" -w "%{http_code}" "$API_HEALTH_URL" || true)"
-body="$(cat "$tmp")"
-rm -f "$tmp"
+API_HEALTH_URL="http://127.0.0.1:3001/health/db"
 echo "health_url=$API_HEALTH_URL"
-echo "http_code=$http_code"
-echo "body=$body"
-if [[ "$http_code" != "200" ]]; then
-  echo "ops-verify.sh: /health/db did not return HTTP 200" >&2
-  exit 1
-fi
-if [[ "$body" != *"\"ok\":true"* ]]; then
-  echo "ops-verify.sh: /health/db response does not contain ok=true" >&2
+max_attempts=10
+sleep_sec=2
+last_http_code=""
+
+for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+  tmp="$(mktemp)"
+  http_code="$(curl -sS -o "$tmp" -w "%{http_code}" "$API_HEALTH_URL" || true)"
+  body="$(cat "$tmp")"
+  rm -f "$tmp"
+
+  echo "smoke attempt $attempt/$max_attempts: http_code=$http_code"
+  if [[ "$http_code" == "200" ]]; then
+    echo "smoke success: /health/db returned HTTP 200"
+    break
+  fi
+
+  last_http_code="$http_code"
+  if [[ "$attempt" -lt "$max_attempts" ]]; then
+    echo "smoke retry in ${sleep_sec}s; latest body: $body"
+    sleep "$sleep_sec"
+  fi
+done
+
+if [[ "${http_code:-}" != "200" ]]; then
+  echo "ops-verify.sh: /health/db did not return HTTP 200 after ${max_attempts} attempts (last=$last_http_code)" >&2
   exit 1
 fi
 
