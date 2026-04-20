@@ -25,6 +25,10 @@ export interface MaxClientOptions {
    * to compare MAX behaviour (link registry vs mini app link registry).
    */
   discussInlineMode?: MaxDiscussInlineMode;
+  /** Registered mini app identifier for `open_app.web_app` (e.g. bot username / link id). */
+  openAppId: string;
+  /** Optional contact id for `open_app` buttons. */
+  openAppContactId?: number;
 }
 
 /** Thrown when MAX HTTP API returns non-JSON, error status, or unreadable body. */
@@ -122,18 +126,22 @@ export class MaxClient {
   private readonly apiVersion: string;
   private readonly logOpenAppPayload?: MaxClientLogOpenAppPayload;
   private readonly discussInlineMode: MaxDiscussInlineMode;
+  private readonly openAppId: string;
+  private readonly openAppContactId?: number;
 
   constructor(
     private readonly token: string,
     /** API origin, e.g. https://platform-api.max.ru (not the mini app site). */
     private readonly baseUrl: string,
-    /** Mini app URL for `open_app` (`web_app`); same string used as `url` for diagnostic `link` mode. */
+    /** URL for link-mode diagnostics and mini app web origin. */
     private readonly webAppUrl: string,
     opts?: MaxClientOptions
   ) {
     this.apiVersion = opts?.apiVersion ?? "1.2.5";
     this.logOpenAppPayload = opts?.logOpenAppPayload;
     this.discussInlineMode = opts?.discussInlineMode ?? "open_app";
+    this.openAppId = opts?.openAppId ?? "";
+    this.openAppContactId = opts?.openAppContactId;
   }
 
   /** Diagnostic: POST /messages?chat_id=…&v=… (token only in Authorization header). */
@@ -159,7 +167,9 @@ export class MaxClient {
   private discussKeyboardAttachment(buttonText: string, startParam: string) {
     return buildDiscussInlineKeyboardAttachment({
       mode: this.discussInlineMode,
-      targetUrl: this.webAppUrl,
+      openAppWebApp: this.openAppId,
+      openAppContactId: this.openAppContactId,
+      linkUrl: this.webAppUrl,
       buttonText,
       startParam
     });
@@ -175,6 +185,8 @@ export class MaxClient {
     }
     const serialized = JSON.stringify(body);
     const firstBtn = this.discussInlineMode === "open_app" ? "open_app" : "link";
+    const openAppWebAppSource = "MAX_OPEN_APP_ID";
+    const openAppWebAppValue = this.openAppId;
     this.logOpenAppPayload({
       maxDiscussInlineOutgoing: true,
       operation,
@@ -184,6 +196,9 @@ export class MaxClient {
       startParam,
       webAppUrl: this.webAppUrl,
       webAppHost: host,
+      openAppWebAppValue,
+      openAppWebAppSource,
+      openAppContactId: this.openAppContactId,
       attachmentsJsonPreview: serialized.slice(0, 16_000),
       attachmentsJsonLen: serialized.length
     });
@@ -231,7 +246,9 @@ export class MaxClient {
       attachments: [
         buildDiscussInlineKeyboardAttachment({
           mode: args.mode,
-          targetUrl,
+          openAppWebApp: this.openAppId,
+          openAppContactId: this.openAppContactId,
+          linkUrl: targetUrl,
           buttonText: args.buttonText,
           startParam: args.startParam
         })

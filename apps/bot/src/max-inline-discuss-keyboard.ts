@@ -9,7 +9,7 @@ export type DiscussInlineKeyboardAttachment = {
   payload: {
     buttons: Array<
       Array<
-        | { type: "open_app"; text: string; web_app: string; payload: string }
+        | { type: "open_app"; text: string; web_app: string; payload: string; contact_id?: number }
         | { type: "link"; text: string; url: string }
       >
     >;
@@ -18,26 +18,37 @@ export type DiscussInlineKeyboardAttachment = {
 
 export function buildDiscussInlineKeyboardAttachment(args: {
   mode: MaxDiscussInlineMode;
-  /** For `open_app`: `web_app` string. For `link`: `url` (same origin as mini app for diagnostics). */
-  targetUrl: string;
+  /** For `open_app`: registered mini app identifier (`web_app`). */
+  openAppWebApp: string;
+  /** Optional bot id for MAX open_app lookup (kept optional; many setups work without it). */
+  openAppContactId?: number;
+  /** For `link`: URL string (same origin as mini app for diagnostics). */
+  linkUrl: string;
   buttonText: string;
   /** Only used when `mode === "open_app"` (MAX start_param / payload). */
   startParam: string;
 }): DiscussInlineKeyboardAttachment {
   if (args.mode === "open_app") {
+    const openAppButton: { type: "open_app"; text: string; web_app: string; payload: string; contact_id?: number } = {
+      type: "open_app",
+      text: args.buttonText,
+      web_app: args.openAppWebApp,
+      payload: args.startParam
+    };
+    if (typeof args.openAppContactId === "number") {
+      openAppButton.contact_id = args.openAppContactId;
+    }
     return {
       type: "inline_keyboard",
       payload: {
-        buttons: [
-          [{ type: "open_app", text: args.buttonText, web_app: args.targetUrl, payload: args.startParam }]
-        ]
+        buttons: [[openAppButton]]
       }
     };
   }
   return {
     type: "inline_keyboard",
     payload: {
-      buttons: [[{ type: "link", text: args.buttonText, url: args.targetUrl }]]
+      buttons: [[{ type: "link", text: args.buttonText, url: args.linkUrl }]]
     }
   };
 }

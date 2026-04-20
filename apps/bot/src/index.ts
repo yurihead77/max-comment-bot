@@ -30,6 +30,13 @@ const envSchema = z.object({
     .string()
     .url()
     .transform((s) => normalizeWebAppUrl(s)),
+  /** Registered mini app identifier used in open_app.web_app (not URL). */
+  MAX_OPEN_APP_ID: z.string().min(1),
+  /** Optional bot contact id for open_app buttons. */
+  MAX_OPEN_APP_CONTACT_ID: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.coerce.number().int().positive().optional()
+  ),
   /**
    * Diagnostic only: `link` uses inline `url` button to the same `MAX_WEBAPP_URL` instead of `open_app`.
    * Does not change webhook/register code paths — only keyboard JSON for publish + sync-button.
@@ -75,6 +82,8 @@ async function bootstrap() {
   const maxClient = new MaxClient(env.MAX_BOT_TOKEN, env.MAX_API_BASE_URL, env.MAX_WEBAPP_URL, {
     apiVersion: env.MAX_API_VERSION,
     discussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
+    openAppId: env.MAX_OPEN_APP_ID,
+    openAppContactId: env.MAX_OPEN_APP_CONTACT_ID,
     logOpenAppPayload: (meta) => {
       app.log.info(meta, "MAX messages: outgoing discuss inline_keyboard (see discussInlineMode / inlineButtonType)");
     }
@@ -85,8 +94,11 @@ async function bootstrap() {
       maxDiscussDiagBootstrap: true,
       maxBotTokenSha256Prefix: maxBotTokenSha256Prefix(env.MAX_BOT_TOKEN),
       maxWebappUrlNormalized: env.MAX_WEBAPP_URL,
+      maxOpenAppId: env.MAX_OPEN_APP_ID,
+      maxOpenAppContactId: env.MAX_OPEN_APP_CONTACT_ID,
       discussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
-      inlineButtonType: env.MAX_OPEN_APP_DEBUG_MODE === "link" ? "link" : "open_app"
+      inlineButtonType: env.MAX_OPEN_APP_DEBUG_MODE === "link" ? "link" : "open_app",
+      openAppWebAppSource: "MAX_OPEN_APP_ID"
     },
     "MAX discuss diagnostics: env snapshot at bot startup"
   );
@@ -125,7 +137,9 @@ async function bootstrap() {
       attachments: [
         buildDiscussInlineKeyboardAttachment({
           mode: env.MAX_OPEN_APP_DEBUG_MODE,
-          targetUrl: env.MAX_WEBAPP_URL,
+          openAppWebApp: env.MAX_OPEN_APP_ID,
+          openAppContactId: env.MAX_OPEN_APP_CONTACT_ID,
+          linkUrl: env.MAX_WEBAPP_URL,
           buttonText: body.buttonText,
           startParam
         })
@@ -146,8 +160,12 @@ async function bootstrap() {
         maxApiVersion: env.MAX_API_VERSION,
         maxBotTokenSha256Prefix: maxBotTokenSha256Prefix(env.MAX_BOT_TOKEN),
         maxWebappUrlNormalized: env.MAX_WEBAPP_URL,
+        maxOpenAppId: env.MAX_OPEN_APP_ID,
+        maxOpenAppContactId: env.MAX_OPEN_APP_CONTACT_ID,
         discussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
         inlineButtonType: env.MAX_OPEN_APP_DEBUG_MODE === "link" ? "link" : "open_app",
+        openAppWebAppUsed: env.MAX_OPEN_APP_ID,
+        openAppWebAppSource: "MAX_OPEN_APP_ID",
         putRequestPayloadPreview: syncPutPayloadPreview,
         maxWebappHost: (() => {
           try {
@@ -186,8 +204,12 @@ async function bootstrap() {
             bodyPreview: e.bodyPreview,
             maxBotTokenSha256Prefix: maxBotTokenSha256Prefix(env.MAX_BOT_TOKEN),
             maxWebappUrlNormalized: env.MAX_WEBAPP_URL,
+            maxOpenAppId: env.MAX_OPEN_APP_ID,
+            maxOpenAppContactId: env.MAX_OPEN_APP_CONTACT_ID,
             discussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
             inlineButtonType: env.MAX_OPEN_APP_DEBUG_MODE === "link" ? "link" : "open_app",
+            openAppWebAppUsed: env.MAX_OPEN_APP_ID,
+            openAppWebAppSource: "MAX_OPEN_APP_ID",
             putRequestPayloadPreview: syncPutPayloadPreview,
             ...(linkNotFound
               ? {
@@ -195,14 +217,14 @@ async function bootstrap() {
                   hint:
                     env.MAX_OPEN_APP_DEBUG_MODE === "link"
                       ? "404 with type=link — not the open_app mini app registry path; see docs/max-open-app-debug.md."
-                      : "MAX looks up `web_app` against the mini app link registered for the bot; it must match exactly (path, https, no stray slash). See docs/max-integration-manual.md and docs/max-open-app-debug.md."
+                      : "MAX looks up `web_app` against the mini app id/link registered for the bot; check MAX_OPEN_APP_ID first. See docs/max-integration-manual.md and docs/max-open-app-debug.md."
                 }
               : {})
           },
           linkNotFound
             ? env.MAX_OPEN_APP_DEBUG_MODE === "link"
               ? "MAX PUT /messages: 404 with link button (unexpected for link-only; check message_id/token)"
-              : "MAX PUT /messages: Link not found for open_app.web_app (check MAX_WEBAPP_URL vs MAX developer UI)"
+              : "MAX PUT /messages: Link not found for open_app.web_app (check MAX_OPEN_APP_ID vs MAX developer UI)"
             : "MAX PUT /messages failed (non-JSON or HTTP error — use MAX_API_BASE_URL=https://platform-api.max.ru per dev.max.ru)"
         );
         return reply.code(502).send({
@@ -235,13 +257,15 @@ async function bootstrap() {
     }
 
     const linkTarget = d.linkUrl ? normalizeWebAppUrl(d.linkUrl) : env.MAX_WEBAPP_URL;
-    const targetUrl = d.buttonType === "link" ? linkTarget : env.MAX_WEBAPP_URL;
+    const targetUrl = d.buttonType === "link" ? linkTarget : env.MAX_OPEN_APP_ID;
 
     const requestBody = {
       attachments: [
         buildDiscussInlineKeyboardAttachment({
           mode: d.buttonType,
-          targetUrl,
+          openAppWebApp: env.MAX_OPEN_APP_ID,
+          openAppContactId: env.MAX_OPEN_APP_CONTACT_ID,
+          linkUrl: targetUrl,
           buttonText: d.buttonText,
           startParam: d.startParam
         })
@@ -254,8 +278,12 @@ async function bootstrap() {
         route: "/internal/debug/put-messages-button",
         maxBotTokenSha256Prefix: maxBotTokenSha256Prefix(env.MAX_BOT_TOKEN),
         maxWebappUrlNormalized: env.MAX_WEBAPP_URL,
+        maxOpenAppId: env.MAX_OPEN_APP_ID,
+        maxOpenAppContactId: env.MAX_OPEN_APP_CONTACT_ID,
         envDiscussInlineMode: env.MAX_OPEN_APP_DEBUG_MODE,
         requestButtonType: d.buttonType,
+        openAppWebAppSource: "MAX_OPEN_APP_ID",
+        openAppWebAppUsed: d.buttonType === "open_app" ? env.MAX_OPEN_APP_ID : undefined,
         messageId: mid,
         putRequestPayloadPreview: requestPayloadPreview,
         maxApiUrlRedacted: redactBotTokenInUrl(maxClient.putMessagesUrl(mid), env.MAX_BOT_TOKEN)
