@@ -63,6 +63,16 @@ step "Repository root"
 echo "REPO_ROOT=$REPO_ROOT"
 cd "$REPO_ROOT"
 
+if [[ ! -f ".env.production" ]]; then
+  echo "ops-verify.sh: .env.production not found in $REPO_ROOT (required for DATABASE_URL and runtime env)." >&2
+  exit 1
+fi
+
+set -a
+# shellcheck disable=SC1091
+source ".env.production"
+set +a
+
 step "1/5 Start postgres service and inspect health"
 run_checked "docker compose up comments-db" docker compose up -d comments-db
 run_checked "docker compose ps" docker compose ps
