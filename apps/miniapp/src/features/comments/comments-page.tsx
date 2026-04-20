@@ -9,7 +9,7 @@ import {
   updateOwnComment,
   uploadCommentImage
 } from "../../lib/api-client";
-import { getInitData, getStartParam } from "../../lib/max-webapp";
+import { getStartParam, waitForInitData } from "../../lib/max-webapp";
 import { CommentForm } from "./comment-form";
 import { CommentList } from "./comment-list";
 import type { CommentItemModel } from "./comment-item";
@@ -28,6 +28,9 @@ export function CommentsPage() {
   function toBootstrapErrorMessage(error: unknown): string {
     if (!(error instanceof Error)) return "Ошибка загрузки данных";
     const msg = error.message.toLowerCase();
+    if (msg.includes("initdata or devmock is required")) {
+      return "MAX не передал initData (попробуйте открыть mini app повторно)";
+    }
     if (msg.includes("auth failed") || msg.includes("dev auth failed")) {
       return "Не удалось авторизовать mini app";
     }
@@ -64,7 +67,7 @@ export function CommentsPage() {
               chatMaxId: String(import.meta.env.VITE_DEV_CHAT_MAX_ID ?? "-100"),
               startParam: startParam || (resolvedPostId ? `post_${resolvedPostId}` : undefined)
             })
-          : await authByInitData(getInitData());
+          : await authByInitData(await waitForInitData());
 
         setUserId(auth.userId);
         const postIdFromAuth = auth.startParam?.replace(/^post_/, "").trim() ?? "";

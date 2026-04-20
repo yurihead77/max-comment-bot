@@ -7,7 +7,8 @@ export async function authByInitData(initData: string) {
     body: JSON.stringify({ initData })
   });
   if (!response.ok) {
-    throw new Error("auth failed");
+    const errText = await response.text();
+    throw new Error(`auth failed: ${response.status} ${errText}`);
   }
   return response.json();
 }
