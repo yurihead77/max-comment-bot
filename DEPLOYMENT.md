@@ -58,8 +58,9 @@ docker compose up -d comments-db
 cd /opt/max-comment-bot   # repo root
 pnpm db:preflight
 pnpm db:deploy
-pm2 restart max-api       # example; cwd should be apps/api or use ecosystem file
+pm2 restart commentbot-api --update-env
 curl -sf "http://127.0.0.1:3001/health/db"
+pm2 restart commentbot-bot --update-env
 ```
 
 One-command variant (runs the same checks and fails fast on any step):
@@ -71,6 +72,18 @@ pnpm ops:verify
 
 - **`pnpm db:preflight`** — same logic as API startup: wait on TCP (via maintenance URL), then **`full`** mode checks `pg_database` for the DB named in **`DATABASE_URL`**.
 - **`curl …/health/db`** — confirms Prisma can query after the process is up (replace port if **`API_PORT`** is not `3001`).
+- Restart order matters: **API first**, DB health check second, **bot last**. This avoids bot/API/DB drift after DB auth failures.
+
+### Quick DB auth sanity check (P1000 / wrong password)
+
+If API fails with Prisma auth errors (`P1000`), verify the credentials from the same env source PM2 uses:
+
+```bash
+set -a && source /opt/max-comment-bot/.env.production && set +a
+psql "$DATABASE_URL" -c "select 1;"
+```
+
+If this command fails, fix `.env.production` (or PM2 env) first, then rerun the canonical flow above.
 
 ### API startup preflight and health
 

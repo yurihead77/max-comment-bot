@@ -21,7 +21,18 @@ export function CommentsPage() {
   const [comments, setComments] = useState<CommentItemModel[]>([]);
   const [restriction, setRestriction] = useState<null | { type: string; endsAt: string | null }>(null);
   const [loading, setLoading] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [editing, setEditing] = useState<CommentItemModel | null>(null);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+
+  function toBootstrapErrorMessage(error: unknown): string {
+    if (!(error instanceof Error)) return "Ошибка загрузки данных";
+    const msg = error.message.toLowerCase();
+    if (msg.includes("auth failed") || msg.includes("dev auth failed")) {
+      return "Не удалось авторизовать mini app";
+    }
+    return error.message || "Ошибка загрузки данных";
+  }
 
   async function reloadComments(currentPostId: string) {
     const response = await getComments(currentPostId);
@@ -37,40 +48,59 @@ export function CommentsPage() {
 
   useEffect(() => {
     async function init() {
-      const startParam = getStartParam();
-      const query = new URLSearchParams(window.location.search);
-      const postFromQuery = query.get("postId") ?? import.meta.env.VITE_DEV_POST_ID ?? "";
-      const resolvedPostId = (startParam?.replace(/^post_/, "") || postFromQuery || "").trim();
+      setLoading(true);
+      setBootstrapError(null);
+      try {
+        const startParam = getStartParam();
+        const query = new URLSearchParams(window.location.search);
+        const postFromQuery = query.get("postId") ?? import.meta.env.VITE_DEV_POST_ID ?? "";
+        const resolvedPostId = (startParam?.replace(/^post_/, "") || postFromQuery || "").trim();
 
-      const useDevMock = import.meta.env.VITE_DEV_MAX_AUTH === "true";
-      const auth = useDevMock
-        ? await authByDevMock({
-            maxUserId: String(import.meta.env.VITE_DEV_MAX_USER_ID ?? "900001"),
-            username: "localdev",
-            chatMaxId: String(import.meta.env.VITE_DEV_CHAT_MAX_ID ?? "-100"),
-            startParam: startParam || (resolvedPostId ? `post_${resolvedPostId}` : undefined)
-          })
-        : await authByInitData(getInitData());
+        const useDevMock = import.meta.env.VITE_DEV_MAX_AUTH === "true";
+        const auth = useDevMock
+          ? await authByDevMock({
+              maxUserId: String(import.meta.env.VITE_DEV_MAX_USER_ID ?? "900001"),
+              username: "localdev",
+              chatMaxId: String(import.meta.env.VITE_DEV_CHAT_MAX_ID ?? "-100"),
+              startParam: startParam || (resolvedPostId ? `post_${resolvedPostId}` : undefined)
+            })
+          : await authByInitData(getInitData());
 
-      setUserId(auth.userId);
-      const postIdFromAuth = auth.startParam?.replace(/^post_/, "").trim() ?? "";
-      const finalPostId = resolvedPostId || postIdFromAuth;
-      setPostId(finalPostId);
+        setUserId(auth.userId);
+        const postIdFromAuth = auth.startParam?.replace(/^post_/, "").trim() ?? "";
+        const finalPostId = resolvedPostId || postIdFromAuth;
+        setPostId(finalPostId);
 
-      if (finalPostId) {
-        const post = await getPost(finalPostId, auth.userId);
-        setRestriction(post.restriction);
-        await reloadComments(finalPostId);
+        if (finalPostId) {
+          const post = await getPost(finalPostId, auth.userId);
+          setRestriction(post.restriction);
+          await reloadComments(finalPostId);
+        }
+      } catch (error) {
+        setBootstrapError(toBootstrapErrorMessage(error));
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     void init();
-  }, []);
+  }, [bootstrapAttempt]);
 
   const canComment = useMemo(() => !restriction, [restriction]);
 
   if (loading) {
     return <p>Loading...</p>;
+  }
+
+  if (bootstrapError) {
+    return (
+      <main style={{ maxWidth: 680, margin: "0 auto", padding: 16 }}>
+        <h1>Не удалось загрузить обсуждение</h1>
+        <p>{bootstrapError}</p>
+        <button type="button" onClick={() => setBootstrapAttempt((n) => n + 1)}>
+          Повторить
+        </button>
+      </main>
+    );
   }
 
   return (
