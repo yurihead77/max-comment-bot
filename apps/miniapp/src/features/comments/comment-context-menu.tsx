@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { CommentItemModel } from "./comment-item";
 import { CONTEXT_MENU_REACTION_EMOJIS } from "./comment-reactions";
 import {
@@ -9,26 +9,46 @@ import {
   COMMENT_CTX_REPLY,
   COMMENT_CTX_REPORT
 } from "./comment-ui-strings";
+import { copyTextToClipboard } from "../../lib/clipboard-copy";
 
 const POPOVER_W = 268;
+const MARGIN = 8;
 
-function popoverPosition(anchor: { x: number; y: number }): CSSProperties {
-  const margin = 10;
-  const estH = 340;
-  let left = anchor.x - POPOVER_W / 2;
-  left = Math.max(margin, Math.min(left, window.innerWidth - POPOVER_W - margin));
-  let top = anchor.y - estH - margin;
-  if (top < margin) top = anchor.y + margin;
-  top = Math.max(margin, Math.min(top, window.innerHeight - estH - margin));
-  return {
-    position: "fixed",
-    left,
-    top,
-    width: POPOVER_W,
-    maxWidth: `min(${POPOVER_W}px, calc(100vw - ${margin * 2}px))`,
-    zIndex: 1001,
-    transform: "none"
-  };
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(Math.max(lo, n), hi);
+}
+
+/** Position fixed popover so it stays inside the visual viewport (client coords already include scroll). */
+function clampPopoverBox(
+  anchor: { x: number; y: number },
+  menuWidth: number,
+  menuHeight: number
+): { left: number; top: number; width: number; maxHeight: number } {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const maxH = vh - MARGIN * 2;
+  const effH = Math.min(menuHeight, maxH);
+  const w = Math.min(menuWidth, vw - MARGIN * 2);
+
+  let left = anchor.x - w / 2;
+  left = clamp(left, MARGIN, vw - w - MARGIN);
+
+  let top = anchor.y - effH - MARGIN;
+  if (top < MARGIN) {
+    top = anchor.y + MARGIN;
+  }
+  const maxTop = vh - effH - MARGIN;
+  top = clamp(top, MARGIN, Math.max(MARGIN, maxTop));
+
+  return { left, top, width: w, maxHeight: maxH };
+}
+
+function estimateMenuHeight(own: boolean): number {
+  const reactionBar = 48;
+  const row = 44;
+  const rows = own ? 5 : 4;
+  const padding = 12;
+  return reactionBar + rows * row + padding;
 }
 
 export interface CommentContextMenuProps {
@@ -59,11 +79,62 @@ export function CommentContextMenu({
   onDelete
 }: CommentContextMenuProps) {
   const open = Boolean(comment && anchor);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties | undefined>(undefined);
+  const own = comment ? comment.authorId === currentUserId : false;
 
-  const style = useMemo(() => {
-    if (!anchor) return undefined;
-    return popoverPosition(anchor);
-  }, [anchor]);
+  useLayoutEffect(() => {
+    if (!open || !anchor) {
+      setPopoverStyle(undefined);
+      return;
+    }
+    const node = popoverRef.current;
+    if (!node) return;
+
+    const apply = () => {
+      const rect = node.getBoundingClientRect();
+      const h = rect.height || estimateMenuHeight(own);
+      const w = rect.width || POPOVER_W;
+      const box = clampPopoverBox(anchor, w, h);
+      setPopoverStyle({
+        position: "fixed",
+        left: box.left,
+        top: box.top,
+        width: box.width,
+        maxWidth: `min(${POPOVER_W}px, calc(100vw - ${MARGIN * 2}px))`,
+        maxHeight: box.maxHeight,
+        zIndex: 1001,
+        transform: "none",
+        visibility: "visible"
+      });
+    };
+
+    apply();
+    let ro: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => apply());
+      ro.observe(node);
+    }
+    window.addEventListener("resize", apply);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", apply);
+    };
+  }, [open, anchor, own, comment?.id]);
+
+  useEffect(() => {
+    if (!open) return;
+    const body = document.body;
+    const html = document.documentElement;
+    const prevBody = body.style.overflow;
+    const prevHtml = html.style.overflow;
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+    return () => {
+      body.style.overflow = prevBody;
+      html.style.overflow = prevHtml;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -74,26 +145,16 @@ export function CommentContextMenu({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!comment || !anchor || !style) return null;
-
-  const own = comment.authorId === currentUserId;
+  if (!comment || !anchor) return null;
 
   const copyText = async () => {
-    try {
-      await navigator.clipboard.writeText(comment.text);
-    } catch {
-      /* ignore */
-    }
+    await copyTextToClipboard(comment.text);
     onClose();
   };
 
   const copyLink = async () => {
     const link = `${window.location.origin}${window.location.pathname}?commentId=${encodeURIComponent(comment.id)}`;
-    try {
-      await navigator.clipboard.writeText(link);
-    } catch {
-      /* ignore */
-    }
+    await copyTextToClipboard(link);
     onClose();
   };
 
@@ -102,12 +163,26 @@ export function CommentContextMenu({
     onClose();
   };
 
+  const est = estimateMenuHeight(own);
+  const fallbackStyle: CSSProperties = {
+    position: "fixed",
+    left: clamp(anchor.x - POPOVER_W / 2, MARGIN, window.innerWidth - POPOVER_W - MARGIN),
+    top: clamp(anchor.y - est, MARGIN, window.innerHeight - est - MARGIN),
+    width: POPOVER_W,
+    maxWidth: `min(${POPOVER_W}px, calc(100vw - ${MARGIN * 2}px))`,
+    maxHeight: window.innerHeight - MARGIN * 2,
+    zIndex: 1001,
+    transform: "none",
+    visibility: "hidden"
+  };
+
   return (
     <>
       <div className="ctx-overlay" role="presentation" onClick={onClose} aria-hidden />
       <div
+        ref={popoverRef}
         className="ctx-popover"
-        style={style}
+        style={popoverStyle ?? fallbackStyle}
         role="dialog"
         aria-label="Меню сообщения"
         onClick={(e) => e.stopPropagation()}

@@ -1,5 +1,8 @@
 import { useCallback, useRef } from "react";
 
+const LONG_PRESS_MS = 450;
+const MOVE_CANCEL_PX = 12;
+
 export interface CommentAuthorModel {
   id: string;
   maxUserId: string;
@@ -37,12 +40,6 @@ function resolveDisplayName(
   return "Пользователь";
 }
 
-function displayPublicId(author: CommentAuthorModel | null | undefined, fallbackAuthorId: string): string {
-  if (author?.maxUserId) return `#${author.maxUserId}`;
-  if (fallbackAuthorId.length <= 10) return `#${fallbackAuthorId}`;
-  return `#${fallbackAuthorId.slice(0, 8)}…`;
-}
-
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
@@ -74,14 +71,26 @@ export function CommentItem({
 }: CommentItemProps) {
   const own = comment.authorId === currentUserId;
   const name = resolveDisplayName(comment, currentUserId, selfDisplayHint);
-  const publicId = displayPublicId(comment.author, comment.authorId);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const longPressListeners = useRef<{
+    move: (e: PointerEvent) => void;
+    end: () => void;
+  } | null>(null);
+  const longPressAnchor = useRef<{ x: number; y: number; pointerId: number } | null>(null);
 
   const clearLongPress = useCallback(() => {
     if (longPressTimer.current !== undefined) {
       window.clearTimeout(longPressTimer.current);
       longPressTimer.current = undefined;
     }
+    const l = longPressListeners.current;
+    if (l) {
+      window.removeEventListener("pointermove", l.move);
+      window.removeEventListener("pointerup", l.end);
+      window.removeEventListener("pointercancel", l.end);
+      longPressListeners.current = null;
+    }
+    longPressAnchor.current = null;
   }, []);
 
   const openAt = (clientX: number, clientY: number) => {
@@ -104,10 +113,48 @@ export function CommentItem({
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest(".chat-bubble__menu-hit")) return;
     clearLongPress();
+
+    const start = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
+    longPressAnchor.current = start;
+
+    const onMove = (ev: PointerEvent) => {
+      if (longPressAnchor.current?.pointerId !== ev.pointerId) return;
+      const ax = longPressAnchor.current.x;
+      const ay = longPressAnchor.current.y;
+      const dx = ev.clientX - ax;
+      const dy = ev.clientY - ay;
+      if (dx * dx + dy * dy > MOVE_CANCEL_PX * MOVE_CANCEL_PX) {
+        clearLongPress();
+      }
+    };
+
+    const onEnd = () => {
+      clearLongPress();
+    };
+
+    longPressListeners.current = { move: onMove, end: onEnd };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+
     longPressTimer.current = window.setTimeout(() => {
       longPressTimer.current = undefined;
-      openAt(e.clientX, e.clientY);
-    }, 450);
+      const l = longPressListeners.current;
+      if (l) {
+        window.removeEventListener("pointermove", l.move);
+        window.removeEventListener("pointerup", l.end);
+        window.removeEventListener("pointercancel", l.end);
+        longPressListeners.current = null;
+      }
+      if (longPressAnchor.current?.pointerId === start.pointerId) {
+        openAt(start.x, start.y);
+      }
+      longPressAnchor.current = null;
+    }, LONG_PRESS_MS);
+  };
+
+  const onTouchMove = () => {
+    clearLongPress();
   };
 
   const rowClass =
@@ -142,6 +189,7 @@ export function CommentItem({
           onPointerUp={clearLongPress}
           onPointerCancel={clearLongPress}
           onPointerLeave={clearLongPress}
+          onTouchMove={onTouchMove}
         >
           <button
             type="button"
@@ -158,15 +206,12 @@ export function CommentItem({
           </button>
           <div className="chat-bubble__meta">
             <span className="chat-bubble__name">{name}</span>
-            <span className="chat-bubble__id">{publicId}</span>
-          </div>
-          <p className="chat-bubble__text">{comment.text}</p>
-          <div className="chat-bubble__footer">
-            <span>
+            <span className="chat-bubble__time">
               {formatTime(comment.createdAt)}
               {comment.isEdited ? " · изменено" : ""}
             </span>
           </div>
+          <p className="chat-bubble__text">{comment.text}</p>
         </div>
       </div>
     </li>
