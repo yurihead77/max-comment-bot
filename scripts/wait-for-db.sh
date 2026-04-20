@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Wait until PostgreSQL accepts connections (requires `pg_isready` from postgresql-client).
 #
+# Defaults (PGUSER=postgres) match docker-compose bootstrap superuser for "is the container up?".
+# Application `DATABASE_URL` should use the dedicated app role (e.g. commentbot) — see DEPLOYMENT.md.
+#
 # Defaults match `docker-compose.yml` (comments-db on localhost:5432).
 # Override with PGHOST, PGPORT, PGUSER, PGDATABASE if needed.
 #

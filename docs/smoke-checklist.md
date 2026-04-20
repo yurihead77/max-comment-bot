@@ -4,7 +4,7 @@
 
 Prerequisites:
 
-- PostgreSQL up; `apps/api/.env` with valid `DATABASE_URL`, `ADMIN_SESSION_SECRET`, `MAX_BOT_TOKEN` (same token as the bot; used to verify mini app initData), seed admin vars, etc.
+- PostgreSQL up; `apps/api/.env` with valid `DATABASE_URL` (recommended: `commentbot` app user — see `DEPLOYMENT.md`), `ADMIN_SESSION_SECRET`, `MAX_BOT_TOKEN` (same token as the bot; used to verify mini app initData), seed admin vars, etc.
 - `pnpm build` completed (`apps/api/dist/server.js`, `apps/bot/dist/index.js` exist).
 - `NODE_ENV=development` and `DEV_MAX_AUTH_BYPASS=true` for dev-mock auth inside the script (set in `apps/api/.env` or export in shell before `node --env-file=...`).
 

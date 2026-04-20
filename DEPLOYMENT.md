@@ -26,26 +26,69 @@ Prisma reads **`DATABASE_URL`** from the process environment (see `apps/api/pris
 **Recommended local/server layout:** run PostgreSQL from the repo’s **`docker-compose.yml`**:
 
 - Service / container name: **`comments-db`** (`postgres:15`).
-- Credentials: **`postgres` / `postgres`** (template only — change for real deployments).
+- Bootstrap superuser (image init only): **`postgres`** + **`POSTGRES_PASSWORD`** — used by the container’s first-time init when **`PGDATA` is empty**.
 - Database created on **first** init of an empty data volume: **`comments`** (`POSTGRES_DB`).
 - Named volume: **`comments_pgdata`** → data survives container restarts.
+
+**Why `P1000` / “Authentication failed” keeps coming back with `postgres:postgres` in `DATABASE_URL`**
+
+- `POSTGRES_PASSWORD` in Compose **does not re-apply** to an already-initialized cluster inside an existing volume. The real password for role `postgres` is whatever was set on **first** init.
+- If operators change Compose env or `.env` to a new password while the volume still holds the old hash, **every** client (Prisma, `psql`, preflight) fails auth until credentials match reality — Prisma reports this as **`P1000`**.
+- **Production recommendation:** put a **dedicated application role** (e.g. **`commentbot`**) in **`DATABASE_URL`**, with its own password you control in app env. Keep **`postgres`** for one-off admin (`docker exec … psql`), backups, and optional **`DATABASE_PREFLIGHT_ADMIN_URL`** only.
 
 ```bash
 docker compose up -d
 # Wait until healthy (optional):
 docker compose ps
-./scripts/wait-for-db.sh          # optional: pg_isready loop (postgresql-client)
-./scripts/preflight-db-check.sh   # wait + verify DB exists in pg_database (postgresql-client)
+./scripts/wait-for-db.sh          # optional: pg_isready loop (defaults: superuser — see script header)
+./scripts/preflight-db-check.sh   # wait + verify DB exists (defaults: superuser — see script header)
 ```
 
 **Important:** `POSTGRES_DB` is applied by the official Postgres image **only when `PGDATA` is empty** (first run). If the volume already exists from an older run **without** that database, or the DB was dropped, **restarting the container does not recreate `comments`**. You must `CREATE DATABASE comments` manually (or remove the volume — **destructive** — see limitations below).
 
-**`DATABASE_URL` examples**
+#### One-time bootstrap: role `commentbot` (run as superuser)
+
+Connect as **`postgres`** (or any superuser) to the **`comments`** database, replace `CHANGE_ME` with a strong secret, then align **`DATABASE_URL`** and PM2/systemd env.
+
+```sql
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'commentbot') THEN
+    CREATE ROLE commentbot LOGIN PASSWORD 'CHANGE_ME';
+  ELSE
+    ALTER ROLE commentbot WITH PASSWORD 'CHANGE_ME';
+  END IF;
+END
+$$;
+
+GRANT CONNECT ON DATABASE comments TO commentbot;
+GRANT CONNECT ON DATABASE postgres TO commentbot;
+```
+
+Then, still connected to database **`comments`**:
+
+```sql
+GRANT USAGE, CREATE ON SCHEMA public TO commentbot;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public TO commentbot;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO commentbot;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLES TO commentbot;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO commentbot;
+```
+
+Run **`pnpm db:deploy`** (and future migrations) with **`DATABASE_URL`** pointing at **`commentbot`** so new objects get correct default privileges.
+
+If you **revoke** `CONNECT` on **`postgres`** from `commentbot` (stricter hardening), set **`DATABASE_PREFLIGHT_ADMIN_URL`** to a superuser URL so API preflight can still read **`pg_database`** (see below).
+
+**`DATABASE_URL` examples (application user)**
 
 | Where API runs | Example `DATABASE_URL` |
 |----------------|-------------------------|
-| Host / IDE, Postgres published on `localhost:5432` | `postgresql://postgres:postgres@127.0.0.1:5432/comments?schema=public` |
-| Another Docker container on the **same Compose network** as `comments-db` | `postgresql://postgres:postgres@comments-db:5432/comments?schema=public` |
+| Host / IDE, Postgres published on `localhost:5432` | `postgresql://commentbot:CHANGE_ME@127.0.0.1:5432/comments?schema=public` |
+| Another Docker container on the **same Compose network** as `comments-db` | `postgresql://commentbot:CHANGE_ME@comments-db:5432/comments?schema=public` |
+
+Optional preflight-only superuser URL (same host/port, user `postgres`, DB `postgres`) when `commentbot` cannot `CONNECT` to `postgres`:
+
+`DATABASE_PREFLIGHT_ADMIN_URL=postgresql://postgres:REAL_SUPERUSER_PASS@127.0.0.1:5432/postgres?schema=public`
 
 If you intentionally use another database name (e.g. legacy **`max_comment_bot`**), create it yourself and point `DATABASE_URL` at that name.
 
@@ -76,14 +119,19 @@ pnpm ops:verify
 
 ### Quick DB auth sanity check (P1000 / wrong password)
 
-If API fails with Prisma auth errors (`P1000`), verify the credentials from the same env source PM2 uses:
+**`P1000`** almost always means: **the user/password in `DATABASE_URL` do not match** the PostgreSQL role (including after Compose/`POSTGRES_PASSWORD` drift on an old volume — see above). Fix credentials first, then restart API/bot with **`--update-env`**.
+
+Verify from the same env source PM2 uses:
 
 ```bash
 set -a && source /opt/max-comment-bot/.env.production && set +a
 psql "$DATABASE_URL" -c "select 1;"
+# optional: explicit app user check
+PGPASSWORD='<commentbot-password>' psql -h 127.0.0.1 -U commentbot -d comments -c '\conninfo'
+curl -sf "http://127.0.0.1:3001/health/db"
 ```
 
-If this command fails, fix `.env.production` (or PM2 env) first, then rerun the canonical flow above.
+If `psql "$DATABASE_URL"` fails, fix `.env.production` (or PM2 env) before **`pm2 restart … --update-env`**.
 
 ### API startup preflight and health
 
@@ -193,7 +241,7 @@ Pick one (or combine) so the Node process inherits variables before `node` start
 
 Use one canonical env source for API and bot (bot only needs the subset it reads; sharing one file is fine).
 
-**`DATABASE_URL` in production:** the database in the URL must exist; **`pnpm db:deploy`** does not create the empty database. Use preflight / **`GET /health/db`** after deploy. If env still points at a missing name, the API fails during **database preflight** (clear log) or Prisma connect (**P1003**).
+**`DATABASE_URL` in production:** the database in the URL must exist; **`pnpm db:deploy`** does not create the empty database. Use preflight / **`GET /health/db`** after deploy. If env still points at a missing name, the API fails during **database preflight** (clear log) or Prisma connect (**P1003** / wrong DB name). Wrong **password or user** surfaces as **`P1000`** at runtime (and during preflight TCP wait if the maintenance URL is also wrong).
 
 ### Backups (helper scripts)
 

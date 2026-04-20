@@ -7,7 +7,7 @@
 #   PGHOST, PGPORT, PGUSER, PGPASSWORD, COMMENTS_DB (default: comments)
 #
 # Usage:
-#   export PGPASSWORD=postgres
+#   export PGPASSWORD=...   # superuser or role with dump rights (defaults below match compose bootstrap)
 #   ./scripts/backup-db.sh                    # writes ./backups/COMMENTS_DB-YYYYMMDD-HHMMSS.sql (never overwrites)
 #   ./scripts/backup-db.sh /path/to/dump.sql  # parent dir is created; refuses if file already exists
 #

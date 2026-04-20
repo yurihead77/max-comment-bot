@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Wait for PostgreSQL, then verify the target database exists (pg_database).
 #
-# Environment (defaults align with docker-compose.yml):
+# Environment (defaults align with docker-compose bootstrap superuser — for "does DB exist?" checks):
 #   PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE (name to check; default: comments)
+# Override PGUSER/PGPASSWORD if your superuser credentials differ from compose templates.
+# Application runtime should use DATABASE_URL with the app user (e.g. commentbot) — see DEPLOYMENT.md.
 #
 # Usage:
 #   export PGPASSWORD=postgres

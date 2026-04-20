@@ -120,6 +120,7 @@ done
 
 if [[ "${http_code:-}" != "200" ]]; then
   echo "ops-verify.sh: /health/db did not return HTTP 200 after ${max_attempts} attempts (last=$last_http_code)" >&2
+  echo "ops-verify.sh: hint — Prisma P1000 / HTTP 503 here often means DATABASE_URL user/password mismatch vs the real DB role (Compose POSTGRES_PASSWORD does not resync an existing volume). See DEPLOYMENT.md." >&2
   exit 1
 fi
 

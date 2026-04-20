@@ -118,7 +118,7 @@ pnpm run build
 pnpm run smoke:functional
 ```
 
-Перед этим поднимите PostgreSQL (см. **`docker-compose.yml`** и **`DEPLOYMENT.md`**) и создайте `apps/api/.env` с рабочим **`DATABASE_URL`**. Имя БД в URL должно существовать (для compose по умолчанию — **`comments`**). Preflight и режимы **`DB_PREFLIGHT_MODE`** / **`DATABASE_PREFLIGHT_ADMIN_URL`** — в **`DEPLOYMENT.md`**. Канонический порядок на сервере: **`docker compose up -d comments-db`** → **`pnpm db:preflight`** → **`pnpm db:deploy`** → **`pm2 restart commentbot-api --update-env`** → **`curl /health/db`** → **`pm2 restart commentbot-bot --update-env`**. Схемы: **`pnpm db:deploy`** (сервер), новые миграции локально: **`pnpm db:migrate:dev`**.
+Перед этим поднимите PostgreSQL (см. **`docker-compose.yml`** и **`DEPLOYMENT.md`**) и создайте `apps/api/.env` с рабочим **`DATABASE_URL`**. Имя БД в URL должно существовать (для compose по умолчанию — **`comments`**). Рекомендуется роль приложения **`commentbot`** (не суперпользователь `postgres`) и отдельный пароль в env — см. **`DEPLOYMENT.md`** (bootstrap SQL, **`P1000`**, дрейф пароля на существующем Docker volume). Preflight: **`DB_PREFLIGHT_MODE`** / **`DATABASE_PREFLIGHT_ADMIN_URL`**. Канонический порядок на сервере: **`docker compose up -d comments-db`** → **`pnpm db:preflight`** → **`pnpm db:deploy`** → **`pm2 restart commentbot-api --update-env`** → **`curl /health/db`** → **`pm2 restart commentbot-bot --update-env`**. Схемы: **`pnpm db:deploy`** (сервер), новые миграции локально: **`pnpm db:migrate:dev`**.
 Для быстрого server/staging-check есть скрипт **`pnpm ops:verify`** (см. `scripts/ops-verify.sh`).
 
 ## Публичные URL загрузок и Nginx

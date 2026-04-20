@@ -43,6 +43,19 @@ function isInsufficientPrivilege(err: unknown): boolean {
   return /permission denied|must be owner|password authentication failed/i.test(msg);
 }
 
+/** Extra operator hint when TCP wait fails due to bad credentials (often same root cause as Prisma `P1000`). */
+function connectionAuthHint(lastErr: unknown): string {
+  const s = String(lastErr);
+  if (/password authentication failed|28P01|authentication failed|SCRAM/i.test(s)) {
+    return (
+      ` Prisma surfaces the same class of problem as P1000 (Authentication failed). ` +
+      `Align DATABASE_URL (and DATABASE_PREFLIGHT_ADMIN_URL if used) with the real role passwords on the server. ` +
+      `Note: changing POSTGRES_PASSWORD in docker-compose does not alter passwords already stored in an existing Postgres data volume.`
+    );
+  }
+  return "";
+}
+
 function resolveAdminUrl(databaseUrl: string, override?: string | null): string {
   const trimmed = override?.trim();
   if (trimmed) return trimmed;
@@ -82,7 +95,8 @@ export async function waitForPostgresAdmin(
   throw new Error(
     `Database preflight: PostgreSQL unreachable after ${maxAttempts} attempts (~${Math.round((maxAttempts * delayMs) / 1000)}s). ` +
       `Checked maintenance TCP host=${ep.host} port=${ep.port} redacted_url=${redactDatabaseUrl(adminUrl)}. ` +
-      `Last error: ${String(lastErr)}`
+      `Last error: ${String(lastErr)}` +
+      connectionAuthHint(lastErr)
   );
 }
 

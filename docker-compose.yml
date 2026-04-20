@@ -3,7 +3,9 @@
 #
 # Named volume `comments_pgdata` survives container restarts. If PGDATA is non-empty,
 # POSTGRES_DB is NOT re-applied — create the DB manually or remove the volume for a fresh init.
-# See DEPLOYMENT.md § PostgreSQL (Docker).
+# POSTGRES_PASSWORD here only applies on first init of an empty volume; it does NOT resync the
+# postgres role password if the volume already exists — mismatched app DATABASE_URL then causes
+# Prisma P1000. Prefer a dedicated app user in DATABASE_URL (see DEPLOYMENT.md: `commentbot`).
 
 services:
   comments-db:
