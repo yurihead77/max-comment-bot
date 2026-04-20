@@ -21,6 +21,9 @@ export function CommentsPage() {
         if (msg.includes("initdata or devmock is required")) {
             return "MAX не передал initData (попробуйте открыть mini app повторно)";
         }
+        if (msg.includes("hash is missing")) {
+            return "MAX передал неполный initData (нет hash). Попробуйте открыть mini app ещё раз";
+        }
         if (msg.includes("auth failed") || msg.includes("dev auth failed")) {
             return "Не удалось авторизовать mini app";
         }
@@ -47,14 +50,24 @@ export function CommentsPage() {
                 const postFromQuery = query.get("postId") ?? import.meta.env.VITE_DEV_POST_ID ?? "";
                 const resolvedPostId = (startParam?.replace(/^post_/, "") || postFromQuery || "").trim();
                 const useDevMock = import.meta.env.VITE_DEV_MAX_AUTH === "true";
-                const auth = useDevMock
-                    ? await authByDevMock({
+                let auth;
+                if (useDevMock) {
+                    auth = await authByDevMock({
                         maxUserId: String(import.meta.env.VITE_DEV_MAX_USER_ID ?? "900001"),
                         username: "localdev",
                         chatMaxId: String(import.meta.env.VITE_DEV_CHAT_MAX_ID ?? "-100"),
                         startParam: startParam || (resolvedPostId ? `post_${resolvedPostId}` : undefined)
-                    })
-                    : await authByInitData(await waitForInitData());
+                    });
+                }
+                else {
+                    const initData = await waitForInitData();
+                    console.log("MAX initData diagnostics", {
+                        length: initData.length,
+                        hasHash: initData.includes("hash="),
+                        hasAuthDate: initData.includes("auth_date=")
+                    });
+                    auth = await authByInitData(initData);
+                }
                 setUserId(auth.userId);
                 const postIdFromAuth = auth.startParam?.replace(/^post_/, "").trim() ?? "";
                 const finalPostId = resolvedPostId || postIdFromAuth;
