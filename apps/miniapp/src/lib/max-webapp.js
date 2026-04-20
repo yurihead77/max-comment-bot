@@ -1,6 +1,10 @@
 export function getStartParam() {
     return window.WebApp?.initDataUnsafe?.start_param ?? null;
 }
+/** Read-only display hint from MAX bridge (not for auth). */
+export function getInitDataUnsafeUser() {
+    return window.WebApp?.initDataUnsafe?.user ?? null;
+}
 export function getInitData() {
     return window.WebApp?.initData ?? "";
 }

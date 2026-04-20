@@ -18,11 +18,22 @@ export interface CommentItemModel {
   author?: CommentAuthorModel | null;
 }
 
-function displayName(author: CommentAuthorModel | null | undefined): string {
-  if (!author) return "Пользователь";
+function authorDisplayName(author: CommentAuthorModel | null | undefined): string | null {
+  if (!author) return null;
   const parts = [author.firstName, author.lastName].filter(Boolean) as string[];
   if (parts.length) return parts.join(" ");
   if (author.username) return author.username.startsWith("@") ? author.username : `@${author.username}`;
+  return null;
+}
+
+function resolveDisplayName(
+  comment: CommentItemModel,
+  currentUserId: string,
+  selfDisplayHint: string | null | undefined
+): string {
+  const fromApi = authorDisplayName(comment.author);
+  if (fromApi) return fromApi;
+  if (comment.authorId === currentUserId && selfDisplayHint?.trim()) return selfDisplayHint.trim();
   return "Пользователь";
 }
 
@@ -49,6 +60,7 @@ const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😡", "👎", "🔥
 export interface CommentItemProps {
   comment: CommentItemModel;
   currentUserId: string;
+  selfDisplayHint?: string | null;
   showAvatar: boolean;
   groupedWithPrevious: boolean;
   onOpenMenu: (comment: CommentItemModel, anchor: { x: number; y: number }) => void;
@@ -60,6 +72,7 @@ export interface CommentItemProps {
 export function CommentItem({
   comment,
   currentUserId,
+  selfDisplayHint,
   showAvatar,
   groupedWithPrevious,
   onOpenMenu,
@@ -68,7 +81,7 @@ export function CommentItem({
   onToggleReaction
 }: CommentItemProps) {
   const own = comment.authorId === currentUserId;
-  const name = displayName(comment.author);
+  const name = resolveDisplayName(comment, currentUserId, selfDisplayHint);
   const publicId = displayPublicId(comment.author, comment.authorId);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -85,6 +98,13 @@ export function CommentItem({
 
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    openAt(e.clientX, e.clientY);
+  };
+
+  const onBubbleClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest(".chat-bubble__menu-hit")) return;
+    const sel = typeof window !== "undefined" ? window.getSelection?.()?.toString() ?? "" : "";
+    if (sel.length > 0) return;
     openAt(e.clientX, e.clientY);
   };
 
@@ -124,6 +144,7 @@ export function CommentItem({
         </div>
         <div
           className={"chat-bubble " + (own ? "chat-bubble--own" : "chat-bubble--other")}
+          onClick={onBubbleClick}
           onContextMenu={onContextMenu}
           onPointerDown={onPointerDown}
           onPointerUp={clearLongPress}
@@ -160,6 +181,7 @@ export function CommentItem({
         className="chat-reactions"
         aria-label="Реакции"
         onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {REACTION_EMOJIS.map((emoji) => {
           const count = reactionCounts[emoji] ?? 0;

@@ -49,6 +49,24 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+.chat-empty {
+  text-align: center;
+  padding: 32px 16px 20px;
+  color: var(--max-chat-muted);
+}
+
+.chat-empty__title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--max-chat-text);
+}
+
+.chat-empty__subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
 .comments-app__composer {
   flex-shrink: 0;
   padding: 10px 12px;

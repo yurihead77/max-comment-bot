@@ -9,13 +9,23 @@ import {
   updateOwnComment,
   uploadCommentImage
 } from "../../lib/api-client";
-import { getStartParam, waitForInitData } from "../../lib/max-webapp";
+import { getInitDataUnsafeUser, getStartParam, waitForInitData } from "../../lib/max-webapp";
 import { CommentInput } from "./comment-input";
 import { CommentList } from "./comment-list";
 import { ReplyPreview } from "./reply-preview";
 import type { CommentItemModel } from "./comment-item";
 import { RestrictionBanner } from "../restrictions/restriction-banner";
+import { COMMENT_NO_POST } from "./comment-ui-strings";
 import "./comments-chat.css";
+
+function hintFromInitDataUnsafeUser(): string | null {
+  const u = getInitDataUnsafeUser();
+  if (!u) return null;
+  const full = [u.first_name, u.last_name].filter(Boolean).join(" ").trim();
+  if (full) return full;
+  if (u.username) return u.username.startsWith("@") ? u.username : `@${u.username}`;
+  return null;
+}
 
 export function CommentsPage() {
   const [userId, setUserId] = useState<string>("");
@@ -24,8 +34,9 @@ export function CommentsPage() {
   const [restriction, setRestriction] = useState<null | { type: string; endsAt: string | null }>(null);
   const [loading, setLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<CommentItemModel | null>(null);
-  const [replyTo, setReplyTo] = useState<CommentItemModel | null>(null);
+  const [editingMessage, setEditingMessage] = useState<CommentItemModel | null>(null);
+  const [replyToMessage, setReplyToMessage] = useState<CommentItemModel | null>(null);
+  const [selfDisplayHint, setSelfDisplayHint] = useState<string | null>(null);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
 
   function toBootstrapErrorMessage(error: unknown): string {
@@ -75,6 +86,7 @@ export function CommentsPage() {
             chatMaxId: String(import.meta.env.VITE_DEV_CHAT_MAX_ID ?? "-100"),
             startParam: startParam || (resolvedPostId ? `post_${resolvedPostId}` : undefined)
           });
+          setSelfDisplayHint("localdev");
         } else {
           const initData = await waitForInitData();
           console.log("MAX initData diagnostics", {
@@ -83,6 +95,7 @@ export function CommentsPage() {
             hasAuthDate: initData.includes("auth_date=")
           });
           auth = await authByInitData(initData);
+          setSelfDisplayHint(hintFromInitDataUnsafeUser());
         }
 
         setUserId(auth.userId);
@@ -132,33 +145,43 @@ export function CommentsPage() {
         <h1>Обсуждение</h1>
         <RestrictionBanner restriction={restriction} />
       </header>
-      <CommentList
-        comments={comments}
-        currentUserId={userId}
-        postId={postId}
-        onReply={(c) => {
-          setReplyTo(c);
-          setEditing(null);
-        }}
-        onEdit={(c) => {
-          setEditing(c);
-          setReplyTo(null);
-        }}
-        onDelete={async (commentId) => {
-          await deleteOwnComment(commentId, userId);
-          await reloadComments(postId);
-        }}
-      />
+      {postId ? (
+        <CommentList
+          comments={comments}
+          currentUserId={userId}
+          selfDisplayHint={selfDisplayHint}
+          postId={postId}
+          onReply={(c) => {
+            setReplyToMessage(c);
+            setEditingMessage(null);
+          }}
+          onEdit={(c) => {
+            setEditingMessage(c);
+            setReplyToMessage(null);
+          }}
+          onDelete={async (commentId) => {
+            await deleteOwnComment(commentId, userId);
+            await reloadComments(postId);
+          }}
+        />
+      ) : (
+        <div className="comments-app__scroll">
+          <div className="chat-empty">
+            <p className="chat-empty__title">{COMMENT_NO_POST}</p>
+            <p className="chat-empty__subtitle">Откройте обсуждение из поста в MAX.</p>
+          </div>
+        </div>
+      )}
       {canComment && postId && (
         <div className="comments-app__composer">
-          {!editing ? (
-            <ReplyPreview replyTo={replyTo} onCancel={() => setReplyTo(null)} />
+          {!editingMessage ? (
+            <ReplyPreview replyTo={replyToMessage} onCancel={() => setReplyToMessage(null)} />
           ) : null}
           <CommentInput
-            submitLabel={editing ? "Сохранить" : "Отправить"}
-            initialText={editing?.text ?? ""}
-            replyTo={editing ? null : replyTo}
-            onCancelReply={() => setReplyTo(null)}
+            submitLabel={editingMessage ? "Сохранить" : "Отправить"}
+            initialText={editingMessage?.text ?? ""}
+            replyTo={editingMessage ? null : replyToMessage}
+            onCancelReply={() => setReplyToMessage(null)}
             onSubmit={async (text, files) => {
               const attachmentIds: string[] = [];
               for (const file of files) {
@@ -166,11 +189,12 @@ export function CommentsPage() {
                 attachmentIds.push(uploaded.id);
               }
 
-              if (editing) {
-                await updateOwnComment(editing.id, userId, text);
-                setEditing(null);
+              if (editingMessage) {
+                await updateOwnComment(editingMessage.id, userId, text);
+                setEditingMessage(null);
               } else {
                 await createComment(postId, userId, text, attachmentIds);
+                setReplyToMessage(null);
               }
               await reloadComments(postId);
             }}

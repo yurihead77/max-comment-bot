@@ -1,4 +1,5 @@
 import type { CommentItemModel } from "./comment-item";
+import { COMMENT_REPLY_PREVIEW_TITLE } from "./comment-ui-strings";
 
 export interface ReplyPreviewProps {
   replyTo: CommentItemModel | null;
@@ -17,7 +18,9 @@ export function ReplyPreview({ replyTo, onCancel }: ReplyPreviewProps) {
   return (
     <div className="reply-preview">
       <div className="reply-preview__body">
-        <div className="reply-preview__label">Ответ на: {previewLabel(replyTo)}</div>
+        <div className="reply-preview__label">
+          {COMMENT_REPLY_PREVIEW_TITLE}: {previewLabel(replyTo)}
+        </div>
         <div className="reply-preview__text">{replyTo.text}</div>
       </div>
       <button type="button" className="reply-preview__cancel" onClick={onCancel}>

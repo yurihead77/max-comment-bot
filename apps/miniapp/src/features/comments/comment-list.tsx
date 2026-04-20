@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { CommentContextMenu } from "./comment-context-menu";
 import { CommentItem, type CommentItemModel } from "./comment-item";
+import { COMMENT_EMPTY_SUBTITLE, COMMENT_EMPTY_TITLE } from "./comment-ui-strings";
 
 interface CommentListProps {
   comments: CommentItemModel[];
   currentUserId: string;
+  selfDisplayHint?: string | null;
   postId: string;
   onEdit: (comment: CommentItemModel) => void;
   onDelete: (commentId: string) => void | Promise<void>;
   onReply: (comment: CommentItemModel) => void;
 }
 
-export function CommentList({ comments, currentUserId, postId, onEdit, onDelete, onReply }: CommentListProps) {
+export function CommentList({
+  comments,
+  currentUserId,
+  selfDisplayHint,
+  postId,
+  onEdit,
+  onDelete,
+  onReply
+}: CommentListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ comment: CommentItemModel; x: number; y: number } | null>(null);
   const [reactions, setReactions] = useState<
@@ -42,11 +52,19 @@ export function CommentList({ comments, currentUserId, postId, onEdit, onDelete,
     });
   };
 
+  const empty = comments.length === 0;
+
   return (
     <>
       <div className="comments-app__scroll" ref={scrollRef}>
-        <ul className="chat-list">
-          {comments.map((comment, index) => {
+        {empty ? (
+          <div className="chat-empty" aria-live="polite">
+            <p className="chat-empty__title">{COMMENT_EMPTY_TITLE}</p>
+            <p className="chat-empty__subtitle">{COMMENT_EMPTY_SUBTITLE}</p>
+          </div>
+        ) : (
+          <ul className="chat-list">
+            {comments.map((comment, index) => {
             const prev = comments[index - 1];
             const grouped = Boolean(prev && prev.authorId === comment.authorId);
             const showAvatar = !grouped;
@@ -55,6 +73,7 @@ export function CommentList({ comments, currentUserId, postId, onEdit, onDelete,
                 key={comment.id}
                 comment={comment}
                 currentUserId={currentUserId}
+                selfDisplayHint={selfDisplayHint}
                 showAvatar={showAvatar}
                 groupedWithPrevious={grouped}
                 onOpenMenu={(c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y })}
@@ -64,7 +83,8 @@ export function CommentList({ comments, currentUserId, postId, onEdit, onDelete,
               />
             );
           })}
-        </ul>
+          </ul>
+        )}
       </div>
       <CommentContextMenu
         comment={menu?.comment ?? null}

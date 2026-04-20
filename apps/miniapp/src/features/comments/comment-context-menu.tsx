@@ -1,5 +1,13 @@
 import { useEffect, type CSSProperties } from "react";
 import type { CommentItemModel } from "./comment-item";
+import {
+  COMMENT_CTX_COPY_LINK,
+  COMMENT_CTX_COPY_TEXT,
+  COMMENT_CTX_DELETE,
+  COMMENT_CTX_EDIT,
+  COMMENT_CTX_REPLY,
+  COMMENT_CTX_REPORT
+} from "./comment-ui-strings";
 
 export interface CommentContextMenuProps {
   comment: CommentItemModel | null;
@@ -48,10 +56,7 @@ export function CommentContextMenu({
   };
 
   const copyLink = async () => {
-    const u = new URL(window.location.href);
-    u.searchParams.set("postId", postId);
-    u.searchParams.set("commentId", comment.id);
-    const link = `${u.origin}${u.pathname}?${u.searchParams.toString()}`;
+    const link = `${window.location.origin}${window.location.pathname}?commentId=${encodeURIComponent(comment.id)}`;
     try {
       await navigator.clipboard.writeText(link);
     } catch {
@@ -61,7 +66,7 @@ export function CommentContextMenu({
   };
 
   const report = () => {
-    console.log("report comment", { commentId: comment.id, authorId: comment.authorId });
+    console.log("report comment", { commentId: comment.id, authorId: comment.authorId, postId });
     onClose();
   };
 
@@ -84,18 +89,18 @@ export function CommentContextMenu({
         aria-label="Действия с сообщением"
       >
         <button type="button" className="ctx-item" role="menuitem" onClick={() => onReply(comment)}>
-          Ответить
+          {COMMENT_CTX_REPLY}
         </button>
         <button type="button" className="ctx-item" role="menuitem" onClick={() => void copyText()}>
-          Скопировать текст
+          {COMMENT_CTX_COPY_TEXT}
         </button>
         <button type="button" className="ctx-item" role="menuitem" onClick={() => void copyLink()}>
-          Скопировать ссылку
+          {COMMENT_CTX_COPY_LINK}
         </button>
         {own ? (
           <>
             <button type="button" className="ctx-item" role="menuitem" onClick={() => onEdit(comment)}>
-              Изменить
+              {COMMENT_CTX_EDIT}
             </button>
             <button
               type="button"
@@ -108,12 +113,12 @@ export function CommentContextMenu({
                 })();
               }}
             >
-              Удалить
+              {COMMENT_CTX_DELETE}
             </button>
           </>
         ) : (
           <button type="button" className="ctx-item" role="menuitem" onClick={report}>
-            Пожаловаться
+            {COMMENT_CTX_REPORT}
           </button>
         )}
       </div>

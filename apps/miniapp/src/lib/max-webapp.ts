@@ -4,6 +4,12 @@ declare global {
       initData?: string;
       initDataUnsafe?: {
         start_param?: string;
+        user?: {
+          id?: number | string;
+          first_name?: string;
+          last_name?: string;
+          username?: string;
+        };
       };
     };
   }
@@ -11,6 +17,11 @@ declare global {
 
 export function getStartParam() {
   return window.WebApp?.initDataUnsafe?.start_param ?? null;
+}
+
+/** Read-only display hint from MAX bridge (not for auth). */
+export function getInitDataUnsafeUser() {
+  return window.WebApp?.initDataUnsafe?.user ?? null;
 }
 
 export function getInitData() {
