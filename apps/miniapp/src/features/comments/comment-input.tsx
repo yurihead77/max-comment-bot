@@ -19,7 +19,6 @@ export function CommentInput({
   disabled = false
 }: CommentInputProps) {
   const [text, setText] = useState(initialText);
-  const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -38,9 +37,8 @@ export function CommentInput({
         if (!text.trim() || busy) return;
         setLoading(true);
         try {
-          await onSubmit(text, files);
+          await onSubmit(text, []);
           setText("");
-          setFiles([]);
           if (replyTo) onCancelReply();
         } finally {
           setLoading(false);
@@ -65,16 +63,6 @@ export function CommentInput({
           {loading ? "…" : submitLabel}
         </button>
       </div>
-      <label className="comment-input-form__files">
-        <span>Вложения: </span>
-        <input
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          multiple
-          disabled={busy}
-          onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-        />
-      </label>
     </form>
   );
 }

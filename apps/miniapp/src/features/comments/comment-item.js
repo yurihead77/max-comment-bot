@@ -36,8 +36,7 @@ function formatTime(iso) {
     const d = new Date(iso);
     return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
-const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😡", "👎", "🔥"];
-export function CommentItem({ comment, currentUserId, selfDisplayHint, showAvatar, groupedWithPrevious, onOpenMenu, reactionCounts, userReaction, onToggleReaction }) {
+export function CommentItem({ comment, currentUserId, selfDisplayHint, showAvatar, groupedWithPrevious, onOpenMenu }) {
     const own = comment.authorId === currentUserId;
     const name = resolveDisplayName(comment, currentUserId, selfDisplayHint);
     const publicId = displayPublicId(comment.author, comment.authorId);
@@ -72,18 +71,14 @@ export function CommentItem({ comment, currentUserId, selfDisplayHint, showAvata
         longPressTimer.current = window.setTimeout(() => {
             longPressTimer.current = undefined;
             openAt(e.clientX, e.clientY);
-        }, 480);
+        }, 450);
     };
     const rowClass = "chat-row" +
         (own ? " chat-row--own" : "") +
         (groupedWithPrevious ? " chat-row--grouped" : "");
-    return (_jsxs("li", { className: rowClass, "data-comment-id": comment.id, "data-author-id": comment.authorId, "data-user-id": comment.authorId, children: [_jsxs("div", { className: "chat-bubble-wrap", children: [_jsx("div", { className: "chat-avatar-slot", "aria-hidden": !showAvatar, children: showAvatar ? (_jsx("div", { className: "chat-avatar", children: comment.author?.photoUrl ? (_jsx("img", { src: comment.author.photoUrl, alt: "", width: 36, height: 36 })) : (initials(name)) })) : null }), _jsxs("div", { className: "chat-bubble " + (own ? "chat-bubble--own" : "chat-bubble--other"), onClick: onBubbleClick, onContextMenu: onContextMenu, onPointerDown: onPointerDown, onPointerUp: clearLongPress, onPointerCancel: clearLongPress, onPointerLeave: clearLongPress, children: [_jsx("button", { type: "button", className: "chat-bubble__menu-hit", "aria-label": "\u041C\u0435\u043D\u044E \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F", onPointerDown: (e) => e.stopPropagation(), onClick: (e) => {
-                                    e.stopPropagation();
-                                    const r = e.currentTarget.getBoundingClientRect();
-                                    openAt(r.left + r.width / 2, r.bottom);
-                                }, children: "\u22EF" }), _jsxs("div", { className: "chat-bubble__meta", children: [_jsx("span", { className: "chat-bubble__name", children: name }), _jsx("span", { className: "chat-bubble__id", children: publicId })] }), _jsx("p", { className: "chat-bubble__text", children: comment.text }), _jsx("div", { className: "chat-bubble__footer", children: _jsxs("span", { children: [formatTime(comment.createdAt), comment.isEdited ? " · изменено" : ""] }) })] })] }), _jsx("div", { className: "chat-reactions", "aria-label": "\u0420\u0435\u0430\u043A\u0446\u0438\u0438", onPointerDown: (e) => e.stopPropagation(), onClick: (e) => e.stopPropagation(), children: REACTION_EMOJIS.map((emoji) => {
-                    const count = reactionCounts[emoji] ?? 0;
-                    const active = userReaction === emoji;
-                    return (_jsxs("button", { type: "button", className: "chat-reaction-pill" + (active ? " chat-reaction-pill--active" : ""), onClick: () => onToggleReaction(emoji), children: [emoji, count > 0 ? _jsx("span", { style: { marginLeft: 4, opacity: 0.85 }, children: count }) : null] }, emoji));
-                }) })] }));
+    return (_jsx("li", { className: rowClass, "data-comment-id": comment.id, "data-author-id": comment.authorId, "data-user-id": comment.authorId, children: _jsxs("div", { className: "chat-bubble-wrap", children: [_jsx("div", { className: "chat-avatar-slot", "aria-hidden": !showAvatar, children: showAvatar ? (_jsx("div", { className: "chat-avatar", children: comment.author?.photoUrl ? (_jsx("img", { src: comment.author.photoUrl, alt: "", width: 36, height: 36 })) : (initials(name)) })) : null }), _jsxs("div", { className: "chat-bubble " + (own ? "chat-bubble--own" : "chat-bubble--other"), onClick: onBubbleClick, onContextMenu: onContextMenu, onPointerDown: onPointerDown, onPointerUp: clearLongPress, onPointerCancel: clearLongPress, onPointerLeave: clearLongPress, children: [_jsx("button", { type: "button", className: "chat-bubble__menu-hit", "aria-label": "\u041C\u0435\u043D\u044E \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F", onPointerDown: (e) => e.stopPropagation(), onClick: (e) => {
+                                e.stopPropagation();
+                                const r = e.currentTarget.getBoundingClientRect();
+                                openAt(r.left + r.width / 2, r.bottom);
+                            }, children: "\u22EF" }), _jsxs("div", { className: "chat-bubble__meta", children: [_jsx("span", { className: "chat-bubble__name", children: name }), _jsx("span", { className: "chat-bubble__id", children: publicId })] }), _jsx("p", { className: "chat-bubble__text", children: comment.text }), _jsx("div", { className: "chat-bubble__footer", children: _jsxs("span", { children: [formatTime(comment.createdAt), comment.isEdited ? " · изменено" : ""] }) })] })] }) }));
 }

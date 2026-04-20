@@ -55,8 +55,6 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😡", "👎", "🔥"];
-
 export interface CommentItemProps {
   comment: CommentItemModel;
   currentUserId: string;
@@ -64,9 +62,6 @@ export interface CommentItemProps {
   showAvatar: boolean;
   groupedWithPrevious: boolean;
   onOpenMenu: (comment: CommentItemModel, anchor: { x: number; y: number }) => void;
-  reactionCounts: Record<string, number>;
-  userReaction: string | undefined;
-  onToggleReaction: (emoji: string) => void;
 }
 
 export function CommentItem({
@@ -75,10 +70,7 @@ export function CommentItem({
   selfDisplayHint,
   showAvatar,
   groupedWithPrevious,
-  onOpenMenu,
-  reactionCounts,
-  userReaction,
-  onToggleReaction
+  onOpenMenu
 }: CommentItemProps) {
   const own = comment.authorId === currentUserId;
   const name = resolveDisplayName(comment, currentUserId, selfDisplayHint);
@@ -115,7 +107,7 @@ export function CommentItem({
     longPressTimer.current = window.setTimeout(() => {
       longPressTimer.current = undefined;
       openAt(e.clientX, e.clientY);
-    }, 480);
+    }, 450);
   };
 
   const rowClass =
@@ -176,28 +168,6 @@ export function CommentItem({
             </span>
           </div>
         </div>
-      </div>
-      <div
-        className="chat-reactions"
-        aria-label="Реакции"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {REACTION_EMOJIS.map((emoji) => {
-          const count = reactionCounts[emoji] ?? 0;
-          const active = userReaction === emoji;
-          return (
-            <button
-              key={emoji}
-              type="button"
-              className={"chat-reaction-pill" + (active ? " chat-reaction-pill--active" : "")}
-              onClick={() => onToggleReaction(emoji)}
-            >
-              {emoji}
-              {count > 0 ? <span style={{ marginLeft: 4, opacity: 0.85 }}>{count}</span> : null}
-            </button>
-          );
-        })}
       </div>
     </li>
   );

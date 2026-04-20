@@ -53,6 +53,8 @@ export function CommentList({
   };
 
   const empty = comments.length === 0;
+  const menuId = menu?.comment.id;
+  const menuReactions = menuId ? reactions[menuId] : undefined;
 
   return (
     <>
@@ -65,24 +67,21 @@ export function CommentList({
         ) : (
           <ul className="chat-list">
             {comments.map((comment, index) => {
-            const prev = comments[index - 1];
-            const grouped = Boolean(prev && prev.authorId === comment.authorId);
-            const showAvatar = !grouped;
-            return (
-              <CommentItem
-                key={comment.id}
-                comment={comment}
-                currentUserId={currentUserId}
-                selfDisplayHint={selfDisplayHint}
-                showAvatar={showAvatar}
-                groupedWithPrevious={grouped}
-                onOpenMenu={(c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y })}
-                reactionCounts={reactions[comment.id]?.counts ?? {}}
-                userReaction={reactions[comment.id]?.pick}
-                onToggleReaction={(emoji) => toggleReaction(comment.id, emoji)}
-              />
-            );
-          })}
+              const prev = comments[index - 1];
+              const grouped = Boolean(prev && prev.authorId === comment.authorId);
+              const showAvatar = !grouped;
+              return (
+                <CommentItem
+                  key={comment.id}
+                  comment={comment}
+                  currentUserId={currentUserId}
+                  selfDisplayHint={selfDisplayHint}
+                  showAvatar={showAvatar}
+                  groupedWithPrevious={grouped}
+                  onOpenMenu={(c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y })}
+                />
+              );
+            })}
           </ul>
         )}
       </div>
@@ -91,6 +90,15 @@ export function CommentList({
         anchor={menu ? { x: menu.x, y: menu.y } : null}
         currentUserId={currentUserId}
         postId={postId}
+        reactionCounts={menuReactions?.counts ?? {}}
+        userReaction={menuReactions?.pick}
+        onToggleReaction={
+          menuId
+            ? (emoji) => {
+                toggleReaction(menuId, emoji);
+              }
+            : () => {}
+        }
         onClose={() => setMenu(null)}
         onReply={(c) => {
           onReply(c);
