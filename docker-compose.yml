@@ -1,0 +1,29 @@
+# Local / server PostgreSQL for max-comment-bot.
+# API and other services usually run outside this compose file; use DATABASE_URL accordingly.
+#
+# Named volume `comments_pgdata` survives container restarts. If PGDATA is non-empty,
+# POSTGRES_DB is NOT re-applied — create the DB manually or remove the volume for a fresh init.
+# See DEPLOYMENT.md § PostgreSQL (Docker).
+
+services:
+  comments-db:
+    image: postgres:15
+    container_name: comments-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: comments
+    ports:
+      - "5432:5432"
+    volumes:
+      - comments_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d comments"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  comments_pgdata:

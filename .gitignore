@@ -12,5 +12,6 @@ apps/api/prisma/dev.db-journal
 apps/api/uploads
 coverage
 *.log
+/backups
 .vscode
 .DS_Store

@@ -11,6 +11,6 @@ export default defineConfig({
   sourcemap: true,
   splitting: false,
   treeshake: true,
-  external: ["@prisma/client", ".prisma/client", /^\.prisma\/client/],
+  external: ["@prisma/client", ".prisma/client", /^\.prisma\/client/, "pg"],
   noExternal: []
 });

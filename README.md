@@ -12,7 +12,7 @@ Monorepo skeleton for MAX post discussions:
 
 - Node.js 20+ (uses `node --env-file` in examples)
 - pnpm 10+
-- PostgreSQL reachable from `DATABASE_URL`
+- PostgreSQL reachable from `DATABASE_URL` (quick option: **`docker compose up -d`** in repo root — see **`DEPLOYMENT.md`**)
 
 ## Local setup
 
@@ -29,7 +29,7 @@ For API, either keep a single `apps/api/.env` (recommended for Prisma CLI) or sy
 ```bash
 pnpm install
 pnpm db:generate
-pnpm db:migrate
+pnpm db:deploy
 pnpm db:seed
 ```
 
@@ -112,13 +112,14 @@ pnpm run smoke:functional
 ```bash
 pnpm install
 pnpm db:generate
-pnpm db:migrate
+pnpm db:deploy
 pnpm db:seed
 pnpm run build
 pnpm run smoke:functional
 ```
 
-Перед этим один раз создайте `apps/api/.env` (например из **`.env.example`** или **`apps/api/.env.example`**) с рабочим **`DATABASE_URL`**: на PostgreSQL должна существовать БД с именем из URL (по умолчанию **`max_comment_bot`**). Иначе API не поднимется (**Prisma P1003**), порт **3001** не слушается.
+Перед этим поднимите PostgreSQL (см. **`docker-compose.yml`** и **`DEPLOYMENT.md`**) и создайте `apps/api/.env` с рабочим **`DATABASE_URL`**. Имя БД в URL должно существовать (для compose по умолчанию — **`comments`**). Preflight и режимы **`DB_PREFLIGHT_MODE`** / **`DATABASE_PREFLIGHT_ADMIN_URL`** — в **`DEPLOYMENT.md`**. Канонический порядок на сервере: **`docker compose up -d comments-db`** → **`pnpm db:preflight`** → **`pnpm db:deploy`** → рестарт API → **`curl /health/db`**. Схемы: **`pnpm db:deploy`** (сервер), новые миграции локально: **`pnpm db:migrate:dev`**.
+Для быстрого server/staging-check есть скрипт **`pnpm ops:verify`** (см. `scripts/ops-verify.sh`).
 
 ## Публичные URL загрузок и Nginx
 

@@ -7,6 +7,36 @@ const schema = z
   .object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1),
+  /**
+   * Skip TCP/database-existence preflight in `server.ts` (e.g. rare test harnesses).
+   * Production should leave this unset/false.
+   */
+  SKIP_DB_PREFLIGHT: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  /**
+   * `full` (default): wait for TCP + verify target DB exists in pg_database (via maintenance URL).
+   * `wait`: only wait for PostgreSQL to accept connections — use in CI where DB is created later by another job.
+   * `off`: skip preflight (same intent as SKIP_DB_PREFLIGHT; prefer explicit `off` for documentation).
+   */
+  DB_PREFLIGHT_MODE: z
+    .string()
+    .optional()
+    .transform((v) => {
+      const t = v?.trim().toLowerCase();
+      if (t === "wait") return "wait" as const;
+      if (t === "off") return "off" as const;
+      return "full" as const;
+    }),
+  /**
+   * Optional URL for preflight only: must point to a database the role can **CONNECT** to (usually `postgres`)
+   * for `pg_database` checks. Use when DATABASE_URL uses a non-superuser without CONNECT on `postgres`.
+   */
+  DATABASE_PREFLIGHT_ADMIN_URL: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().url().optional()
+  ),
   API_PORT: z.coerce.number().default(3001),
   /** Behind Nginx / TLS terminator: trust X-Forwarded-* for correct proto/IP */
   TRUST_PROXY: z

@@ -19,28 +19,112 @@
 
 ## Build and database
 
-### PostgreSQL and `DATABASE_URL`
+### PostgreSQL (Docker) and `DATABASE_URL`
 
-Prisma reads **`DATABASE_URL`** from the process environment (see `apps/api/prisma/schema.prisma`). The **database name** in the URL path (segment after the last `/` before `?`) must **already exist** on the server. If it does not, the API exits on startup with **`PrismaClientInitializationError` / `P1003`** (`Database '…' does not exist`) and nothing listens on **`API_PORT`** — the bot then sees **`fetch failed`** to `http://127.0.0.1:3001`.
+Prisma reads **`DATABASE_URL`** from the process environment (see `apps/api/prisma/schema.prisma`). The **database name** in the URL path must **already exist** on the server.
 
-This repo’s **default** database name is **`max_comment_bot`** (see root **`.env.example`** and **`apps/api/.env.example`**). A URL ending in **`/comments`** is **not** defined by the codebase; it usually comes from a hand-edited **`.env`** / **`.env.production`**. Either **create** a database named `comments` or, preferably, **point `DATABASE_URL` at `max_comment_bot`** and create that DB.
+**Recommended local/server layout:** run PostgreSQL from the repo’s **`docker-compose.yml`**:
 
-Create the default database (Linux, user `postgres`; adjust host/user/password):
+- Service / container name: **`comments-db`** (`postgres:15`).
+- Credentials: **`postgres` / `postgres`** (template only — change for real deployments).
+- Database created on **first** init of an empty data volume: **`comments`** (`POSTGRES_DB`).
+- Named volume: **`comments_pgdata`** → data survives container restarts.
 
 ```bash
-# psql
-psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE max_comment_bot;"
-
-# or createdb
-createdb -h 127.0.0.1 -U postgres max_comment_bot
+docker compose up -d
+# Wait until healthy (optional):
+docker compose ps
+./scripts/wait-for-db.sh          # optional: pg_isready loop (postgresql-client)
+./scripts/preflight-db-check.sh   # wait + verify DB exists in pg_database (postgresql-client)
 ```
 
-Then from the repo root:
+**Important:** `POSTGRES_DB` is applied by the official Postgres image **only when `PGDATA` is empty** (first run). If the volume already exists from an older run **without** that database, or the DB was dropped, **restarting the container does not recreate `comments`**. You must `CREATE DATABASE comments` manually (or remove the volume — **destructive** — see limitations below).
+
+**`DATABASE_URL` examples**
+
+| Where API runs | Example `DATABASE_URL` |
+|----------------|-------------------------|
+| Host / IDE, Postgres published on `localhost:5432` | `postgresql://postgres:postgres@127.0.0.1:5432/comments?schema=public` |
+| Another Docker container on the **same Compose network** as `comments-db` | `postgresql://postgres:postgres@comments-db:5432/comments?schema=public` |
+
+If you intentionally use another database name (e.g. legacy **`max_comment_bot`**), create it yourself and point `DATABASE_URL` at that name.
+
+### Canonical server flow (Postgres → migrations → API → smoke)
+
+Use this as the **single ops checklist** (adjust paths and `pm2` name):
+
+```bash
+docker compose up -d comments-db
+cd /opt/max-comment-bot   # repo root
+pnpm db:preflight
+pnpm db:deploy
+pm2 restart max-api       # example; cwd should be apps/api or use ecosystem file
+curl -sf "http://127.0.0.1:3001/health/db"
+```
+
+One-command variant (runs the same checks and fails fast on any step):
+
+```bash
+cd /opt/max-comment-bot
+pnpm ops:verify
+```
+
+- **`pnpm db:preflight`** — same logic as API startup: wait on TCP (via maintenance URL), then **`full`** mode checks `pg_database` for the DB named in **`DATABASE_URL`**.
+- **`curl …/health/db`** — confirms Prisma can query after the process is up (replace port if **`API_PORT`** is not `3001`).
+
+### API startup preflight and health
+
+Before binding **`API_PORT`**, the API runs **`runDbPreflight`** (`apps/api/src/server.ts` + `apps/api/src/db/preflight.ts`):
+
+| Step | What happens |
+|------|----------------|
+| Log | Lines prefixed with **`[db-preflight]`**: expected database name, **host/port parsed from `DATABASE_URL`**, redacted maintenance URL. |
+| Wait | Connect using the **maintenance** URL until PostgreSQL accepts connections or timeout. |
+| Assert (`full` only) | `SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = …)` for the **target** database from `DATABASE_URL`. |
+
+**Modes — `DB_PREFLIGHT_MODE`:**
+
+| Value | Behaviour |
+|-------|-----------|
+| **`full`** (default) | Wait + assert database exists (recommended **production**). |
+| **`wait`** | Wait for PostgreSQL only — **does not** check that the target DB exists (for CI where another job creates the DB **after** the wait). |
+| **`off`** | Skip preflight entirely (same practical effect as **`SKIP_DB_PREFLIGHT=true`**; prefer **`off`** when documenting “preflight disabled”). |
+
+**Maintenance URL and application-only users**
+
+By default preflight connects to database **`postgres`** on the same host/user as **`DATABASE_URL`** to read **`pg_database`**. If the app role **cannot** `CONNECT` to `postgres` (common for locked-down users), preflight fails with an explicit message — **not** “database `comments` missing”. Fix one of:
+
+- set **`DATABASE_PREFLIGHT_ADMIN_URL`** to a URL that can connect (e.g. superuser …`/postgres`) **only for preflight**; or  
+- grant the app user **`CONNECT`** on `postgres` (policy decision).
+
+Operational checks:
+
+- **`GET /healthz`** — process up (no DB check).
+- **`GET /health/db`** — runs `SELECT 1` via Prisma; **`503`** if the app cannot use the DB (good for load balancers after restarts).
+
+Standalone CLI (same env as API):
+
+```bash
+cd apps/api && pnpm run db:preflight
+# or from repo root:
+pnpm db:preflight
+```
+
+`SKIP_DB_PREFLIGHT=true` still skips all of the above (legacy escape hatch; avoid in production).
+
+### Migrations (dev vs server)
+
+| Command | When |
+|---------|------|
+| **`pnpm db:migrate:dev`** | Local development: creates migration files + applies (`prisma migrate dev`). |
+| **`pnpm db:deploy`** | **Servers / CI / production:** applies existing migrations only (`prisma migrate deploy`). **Do not** use `migrate dev` there. |
+
+From the repo root after DB is up:
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm db:generate
-pnpm db:migrate
+pnpm db:deploy
 pnpm db:seed
 pnpm build
 ```
@@ -96,7 +180,31 @@ Pick one (or combine) so the Node process inherits variables before `node` start
 
 Use one canonical env source for API and bot (bot only needs the subset it reads; sharing one file is fine).
 
-**`DATABASE_URL` in production:** the same rules as in [Build and database](#postgresql-and-database_url) apply. If **`/opt/max-comment-bot/.env.production`** (or PM2 env) still points at a non-existent database name (e.g. **`comments`**), the API will crash on Prisma connect (**P1003**) and never bind **`API_PORT`**. Align the name with **`max_comment_bot`** (or whatever DB you created) and restart.
+**`DATABASE_URL` in production:** the database in the URL must exist; **`pnpm db:deploy`** does not create the empty database. Use preflight / **`GET /health/db`** after deploy. If env still points at a missing name, the API fails during **database preflight** (clear log) or Prisma connect (**P1003**).
+
+### Backups (helper scripts)
+
+- **`scripts/backup-db.sh`** — `pg_dump` of **`COMMENTS_DB`** (default `comments`). Creates **`./backups/`** when using the default timestamped filename; refuses to overwrite an existing file; verifies the dump is **non-empty** after `pg_dump`. Requires **`postgresql-client`** and **`PGPASSWORD`** (and optional **`PGHOST`** / **`PGPORT`**).
+- **`scripts/restore-db.sh`** — `psql -f` restore. Requires **`RESTORE_CONFIRM=YES`** (exact), explicit dump path, prints a **large warning** and waits **5 seconds** before running. Read the script header before use.
+
+### What this repository cannot enforce
+
+- **Manual `docker volume rm`** (or deleting host data) — data loss is outside application code.
+- **Wrong `DATABASE_URL` in systemd/PM2** after a restart — operators must keep env in sync with the real cluster.
+- **Postgres up but wrong credentials** — preflight checks existence on the server you reach; auth errors still surface from PostgreSQL.
+- **Order when API is not in Compose** — use preflight in the API process, `./scripts/wait-for-db.sh`, or orchestration (systemd `After=docker.service`, etc.).
+
+### Optional: API in Docker with `depends_on`
+
+If you later add an **`api`** service to Compose, use:
+
+```yaml
+depends_on:
+  comments-db:
+    condition: service_healthy
+```
+
+This file ships **only** `comments-db` so non-Docker API installs stay simple; copy the snippet into your own compose overlay if needed.
 
 **Examples**
 

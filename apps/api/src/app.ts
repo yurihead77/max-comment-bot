@@ -37,6 +37,21 @@ export async function createApp() {
   });
 
   await app.register(prismaPlugin);
+
+  app.get("/health/db", async (request, reply) => {
+    try {
+      await app.prisma.$queryRaw`SELECT 1`;
+      return { ok: true, database: "connected" };
+    } catch (e) {
+      request.log.error({ err: e }, "/health/db: Prisma query failed");
+      return reply.code(503).send({
+        ok: false,
+        database: "unavailable",
+        error: e instanceof Error ? e.message : String(e)
+      });
+    }
+  });
+
   await app.register(sessionPlugin);
 
   await app.register(maxAuthRoutes);
