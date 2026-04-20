@@ -190,13 +190,21 @@ export class MaxClient {
   }
 
   private async maxJsonFetch(method: "POST" | "PUT", url: string, body: unknown): Promise<unknown> {
+    const jsonBody = JSON.stringify(body);
+    console.log("=== MAX REQUEST META ===");
+    console.log({
+      url,
+      method
+    });
+    console.log("=== MAX REQUEST JSON ===");
+    console.log(jsonBody);
     const response = await fetch(url, {
       method,
       headers: {
         Authorization: this.token,
         "content-type": "application/json"
       },
-      body: JSON.stringify(body)
+      body: jsonBody
     });
     const parsed = await readMaxJsonResponse(response, url);
     const preview = JSON.stringify(parsed).slice(0, 300);
@@ -229,13 +237,21 @@ export class MaxClient {
         })
       ]
     };
+    const jsonBody = JSON.stringify(body);
+    console.log("=== MAX REQUEST META ===");
+    console.log({
+      url,
+      method: "PUT"
+    });
+    console.log("=== MAX REQUEST JSON ===");
+    console.log(jsonBody);
     const response = await fetch(url, {
       method: "PUT",
       headers: {
         Authorization: this.token,
         "content-type": "application/json"
       },
-      body: JSON.stringify(body)
+      body: jsonBody
     });
     const text = await response.text();
     const preview = text.slice(0, 16_000);
