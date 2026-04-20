@@ -25,7 +25,7 @@
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-PM2_API_NAME="${PM2_API_NAME:-max-api}"
+PM2_API_NAME="${PM2_API_NAME:-commentbot-api}"
 API_HEALTH_URL="${API_HEALTH_URL:-http://127.0.0.1:3001/health/db}"
 SKIP_PM2_RESTART="${SKIP_PM2_RESTART:-0}"
 
