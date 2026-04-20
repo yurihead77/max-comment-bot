@@ -10,10 +10,12 @@ import {
   uploadCommentImage
 } from "../../lib/api-client";
 import { getStartParam, waitForInitData } from "../../lib/max-webapp";
-import { CommentForm } from "./comment-form";
+import { CommentInput } from "./comment-input";
 import { CommentList } from "./comment-list";
+import { ReplyPreview } from "./reply-preview";
 import type { CommentItemModel } from "./comment-item";
 import { RestrictionBanner } from "../restrictions/restriction-banner";
+import "./comments-chat.css";
 
 export function CommentsPage() {
   const [userId, setUserId] = useState<string>("");
@@ -23,6 +25,7 @@ export function CommentsPage() {
   const [loading, setLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [editing, setEditing] = useState<CommentItemModel | null>(null);
+  const [replyTo, setReplyTo] = useState<CommentItemModel | null>(null);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
 
   function toBootstrapErrorMessage(error: unknown): string {
@@ -42,12 +45,13 @@ export function CommentsPage() {
 
   async function reloadComments(currentPostId: string) {
     const response = await getComments(currentPostId);
-    const mapped: CommentItemModel[] = response.items.map((c: any) => ({
-      id: c.id,
-      text: c.text,
-      authorId: c.authorId,
-      createdAt: c.createdAt,
-      isEdited: c.isEdited
+    const mapped: CommentItemModel[] = response.items.map((c: Record<string, unknown>) => ({
+      id: c.id as string,
+      text: c.text as string,
+      authorId: c.authorId as string,
+      createdAt: c.createdAt as string,
+      isEdited: Boolean(c.isEdited),
+      author: (c.author as CommentItemModel["author"]) ?? null
     }));
     setComments(mapped);
   }
@@ -103,14 +107,18 @@ export function CommentsPage() {
   const canComment = useMemo(() => !restriction, [restriction]);
 
   if (loading) {
-    return <p>Loading...</p>;
+    return (
+      <div className="comments-app" style={{ justifyContent: "center", alignItems: "center" }}>
+        <p style={{ color: "#9b9ba3" }}>Загрузка…</p>
+      </div>
+    );
   }
 
   if (bootstrapError) {
     return (
-      <main style={{ maxWidth: 680, margin: "0 auto", padding: 16 }}>
-        <h1>Не удалось загрузить обсуждение</h1>
-        <p>{bootstrapError}</p>
+      <main className="comments-app" style={{ padding: 16, justifyContent: "center" }}>
+        <h1 style={{ fontSize: "1.1rem" }}>Не удалось загрузить обсуждение</h1>
+        <p style={{ color: "#9b9ba3" }}>{bootstrapError}</p>
         <button type="button" onClick={() => setBootstrapAttempt((n) => n + 1)}>
           Повторить
         </button>
@@ -119,39 +127,56 @@ export function CommentsPage() {
   }
 
   return (
-    <main style={{ maxWidth: 680, margin: "0 auto", padding: 16, display: "grid", gap: 12 }}>
-      <h1>Обсуждение</h1>
-      <RestrictionBanner restriction={restriction} />
+    <div className="comments-app">
+      <header className="comments-app__header">
+        <h1>Обсуждение</h1>
+        <RestrictionBanner restriction={restriction} />
+      </header>
       <CommentList
         comments={comments}
         currentUserId={userId}
-        onEdit={(comment) => setEditing(comment)}
+        postId={postId}
+        onReply={(c) => {
+          setReplyTo(c);
+          setEditing(null);
+        }}
+        onEdit={(c) => {
+          setEditing(c);
+          setReplyTo(null);
+        }}
         onDelete={async (commentId) => {
           await deleteOwnComment(commentId, userId);
           await reloadComments(postId);
         }}
       />
-      {canComment && (
-        <CommentForm
-          submitLabel={editing ? "Update" : "Send"}
-          initialText={editing?.text ?? ""}
-          onSubmit={async (text, files) => {
-            const attachmentIds: string[] = [];
-            for (const file of files) {
-              const uploaded = await uploadCommentImage(file);
-              attachmentIds.push(uploaded.id);
-            }
+      {canComment && postId && (
+        <div className="comments-app__composer">
+          {!editing ? (
+            <ReplyPreview replyTo={replyTo} onCancel={() => setReplyTo(null)} />
+          ) : null}
+          <CommentInput
+            submitLabel={editing ? "Сохранить" : "Отправить"}
+            initialText={editing?.text ?? ""}
+            replyTo={editing ? null : replyTo}
+            onCancelReply={() => setReplyTo(null)}
+            onSubmit={async (text, files) => {
+              const attachmentIds: string[] = [];
+              for (const file of files) {
+                const uploaded = await uploadCommentImage(file);
+                attachmentIds.push(uploaded.id);
+              }
 
-            if (editing) {
-              await updateOwnComment(editing.id, userId, text);
-              setEditing(null);
-            } else {
-              await createComment(postId, userId, text, attachmentIds);
-            }
-            await reloadComments(postId);
-          }}
-        />
+              if (editing) {
+                await updateOwnComment(editing.id, userId, text);
+                setEditing(null);
+              } else {
+                await createComment(postId, userId, text, attachmentIds);
+              }
+              await reloadComments(postId);
+            }}
+          />
+        </div>
       )}
-    </main>
+    </div>
   );
 }
