@@ -43,7 +43,8 @@ const schema = z
     .string()
     .default("false")
     .transform((v) => v === "true" || v === "1"),
-  MAX_INITDATA_SECRET: z.string().min(1),
+  /** MAX bot token: used to derive WebAppData initData secret per MAX docs (`HMAC_SHA256("WebAppData", token)`). */
+  MAX_BOT_TOKEN: z.string().min(1),
   MAX_COMMENT_LENGTH: z.coerce.number().int().positive(),
   MAX_ATTACHMENTS_PER_COMMENT: z.coerce.number().int().positive(),
   MAX_IMAGE_SIZE_MB: z.coerce.number().positive(),

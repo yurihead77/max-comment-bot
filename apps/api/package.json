@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "start:prod": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/db/connection-string.test.ts",
+    "test": "node --import tsx --test src/db/connection-string.test.ts src/modules/auth/max-initdata-verify.test.ts",
     "lint": "echo \"no lint configured\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",

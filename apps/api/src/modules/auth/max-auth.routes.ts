@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { isDevMaxAuthBypassEnabled } from "../../config/env";
-import { validateAndParseInitData } from "./max-initdata.service";
+import { MaxInitDataValidationError, validateAndParseInitData } from "./max-initdata.service";
 
 const devMockSchema = z.object({
   maxUserId: z.string().min(1),
@@ -62,7 +62,15 @@ export const maxAuthRoutes: FastifyPluginAsync = async (app) => {
       };
     }
 
-    const maxPayload = validateAndParseInitData(parsed.data.initData!);
+    let maxPayload;
+    try {
+      maxPayload = validateAndParseInitData(parsed.data.initData!);
+    } catch (error) {
+      if (error instanceof MaxInitDataValidationError) {
+        return reply.code(error.statusCode).send({ error: error.message });
+      }
+      throw error;
+    }
     const user = maxPayload.user;
 
     const dbUser = await app.prisma.user.upsert({
