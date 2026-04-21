@@ -37,6 +37,8 @@ export function CommentList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ comment: CommentItemModel; x: number; y: number } | null>(null);
   const [targetModerationState, setTargetModerationState] = useState<{
+    isSelf: boolean;
+    isTargetModerator: boolean;
     isMuted: boolean;
     isBlocked: boolean;
   } | null>(null);
@@ -82,7 +84,12 @@ export function CommentList({
       try {
         const state = await getModerationUserState(currentUserId, menu.comment.authorId);
         if (!cancelled) {
-          setTargetModerationState({ isMuted: state.isMuted, isBlocked: state.isBlocked });
+          setTargetModerationState({
+            isSelf: state.isSelf,
+            isTargetModerator: state.isTargetModerator,
+            isMuted: state.isMuted,
+            isBlocked: state.isBlocked
+          });
         }
       } catch {
         if (!cancelled) {

@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { ensureModeratorOrAdmin, getActor } from "../admin-authz";
-import { ensureCanModerateTargetUser } from "../moderation/moderation-policy";
+import { ensureCanModerateTargetUser, getModerationTargetInfo } from "../moderation/moderation-policy";
 
 const createSchema = z.object({
   userId: z.string().min(1),
@@ -270,10 +270,7 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "user not found" });
     }
 
-    const policy = await ensureCanModerateTargetUser(request, reply, user.id);
-    if (!policy.ok) {
-      return;
-    }
+    const targetInfo = await getModerationTargetInfo(request, user.id);
 
     const now = new Date();
     const active = await app.prisma.userRestriction.findMany({
@@ -298,6 +295,8 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
     return {
       userId: user.id,
       platformUserId: user.maxUserId,
+      isSelf: targetInfo.isSelf,
+      isTargetModerator: targetInfo.isTargetModerator,
       isMuted: normalized.some((r) => r.type === "mute"),
       isBlocked: normalized.some((r) => r.type === "block"),
       activeRestrictions: normalized

@@ -68,7 +68,7 @@ export interface CommentContextMenuProps {
   onMuteUser: (targetUserId: string) => void | Promise<void>;
   onBlockUser: (targetUserId: string) => void | Promise<void>;
   onUnblockUser: (targetUserId: string) => void | Promise<void>;
-  targetModerationState: { isMuted: boolean; isBlocked: boolean } | null;
+  targetModerationState: { isSelf: boolean; isTargetModerator: boolean; isMuted: boolean; isBlocked: boolean } | null;
 }
 
 export function CommentContextMenu({
@@ -94,6 +94,13 @@ export function CommentContextMenu({
   const popoverRef = useRef<HTMLDivElement>(null);
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties | undefined>(undefined);
   const own = comment ? comment.authorId === currentUserId : false;
+  const moderationState = targetModerationState;
+  const canShowModeratorActions =
+    !own &&
+    canModerate &&
+    Boolean(moderationState) &&
+    !moderationState?.isSelf &&
+    !moderationState?.isTargetModerator;
 
   useLayoutEffect(() => {
     if (!open || !anchor) {
@@ -282,7 +289,7 @@ export function CommentContextMenu({
               </button>
             </>
           ) : null}
-          {!own && canModerate ? (
+          {canShowModeratorActions ? (
             <>
               <button
                 type="button"

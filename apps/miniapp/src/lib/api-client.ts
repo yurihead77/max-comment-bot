@@ -168,6 +168,8 @@ export async function getModerationUserState(actorUserId: string, targetUserId: 
   return response.json() as Promise<{
     userId: string;
     platformUserId: string;
+    isSelf: boolean;
+    isTargetModerator: boolean;
     isMuted: boolean;
     isBlocked: boolean;
     activeRestrictions: Array<{

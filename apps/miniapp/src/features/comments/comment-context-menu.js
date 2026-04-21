@@ -37,6 +37,12 @@ export function CommentContextMenu({ comment, anchor, currentUserId, postId, rea
     const popoverRef = useRef(null);
     const [popoverStyle, setPopoverStyle] = useState(undefined);
     const own = comment ? comment.authorId === currentUserId : false;
+    const moderationState = targetModerationState;
+    const canShowModeratorActions = !own &&
+        canModerate &&
+        Boolean(moderationState) &&
+        !moderationState?.isSelf &&
+        !moderationState?.isTargetModerator;
     useLayoutEffect(() => {
         if (!open || !anchor) {
             setPopoverStyle(undefined);
@@ -140,7 +146,7 @@ export function CommentContextMenu({ comment, anchor, currentUserId, postId, rea
                                                 await Promise.resolve(onDelete(comment.id));
                                                 onClose();
                                             })();
-                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\uD83D\uDDD1" }), _jsx("span", { children: COMMENT_CTX_DELETE })] })] })) : null, !own && canModerate ? (_jsxs(_Fragment, { children: [_jsxs("button", { type: "button", className: "ctx-row ctx-row--danger", onClick: () => {
+                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\uD83D\uDDD1" }), _jsx("span", { children: COMMENT_CTX_DELETE })] })] })) : null, canShowModeratorActions ? (_jsxs(_Fragment, { children: [_jsxs("button", { type: "button", className: "ctx-row ctx-row--danger", onClick: () => {
                                             void (async () => {
                                                 await Promise.resolve(onModerateDelete(comment.id));
                                                 onClose();

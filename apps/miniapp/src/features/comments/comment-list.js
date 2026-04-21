@@ -48,7 +48,12 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
             try {
                 const state = await getModerationUserState(currentUserId, menu.comment.authorId);
                 if (!cancelled) {
-                    setTargetModerationState({ isMuted: state.isMuted, isBlocked: state.isBlocked });
+                    setTargetModerationState({
+                        isSelf: state.isSelf,
+                        isTargetModerator: state.isTargetModerator,
+                        isMuted: state.isMuted,
+                        isBlocked: state.isBlocked
+                    });
                 }
             }
             catch {
