@@ -1,34 +1,58 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { ensureRole } from "../admin-authz";
 
 const createSchema = z.object({
   userId: z.string().min(1),
-  restrictionType: z.enum(["temporary_mute", "permanent_block"]),
+  type: z.enum(["mute", "block"]),
   reason: z.string().optional(),
-  endsAt: z.string().datetime().optional()
+  expiresAt: z.string().datetime().optional()
 });
 
 const patchSchema = z.object({
-  restrictionType: z.enum(["temporary_mute", "permanent_block"]).optional(),
+  type: z.enum(["mute", "block"]).optional(),
   reason: z.string().optional(),
-  endsAt: z.string().datetime().nullable().optional(),
-  isActive: z.boolean().optional()
+  expiresAt: z.string().datetime().nullable().optional(),
+  active: z.boolean().optional()
 });
 
 export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", async (request, reply) => {
-    if (!request.adminSession) {
-      return reply.code(401).send({ error: "unauthorized" });
+    if (!ensureRole(request, reply, ["admin", "moderator"])) {
+      return;
     }
   });
 
-  app.get("/api/admin/restrictions", async () => {
+  app.get("/api/admin/restrictions", async (request) => {
+    const query = request.query as { type?: "mute" | "block"; active?: "true" | "false" };
     const items = await app.prisma.userRestriction.findMany({
-      where: { scopeType: "global" },
+      where: {
+        scopeType: "global",
+        ...(query.type
+          ? {
+              restrictionType: query.type === "mute" ? "temporary_mute" : "permanent_block"
+            }
+          : {}),
+        ...(query.active ? { isActive: query.active === "true" } : {})
+      },
       include: { user: true },
       orderBy: { createdAt: "desc" }
     });
-    return { items };
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        userId: item.userId,
+        type: item.restrictionType === "temporary_mute" ? "mute" : "block",
+        active: item.isActive,
+        reason: item.reason,
+        createdBy: item.createdByUserId,
+        createdAt: item.createdAt,
+        expiresAt: item.endsAt,
+        revokedAt: item.revokedAt,
+        revokedBy: item.revokedByUserId,
+        user: item.user
+      }))
+    };
   });
 
   app.post("/api/admin/restrictions", async (request, reply) => {
@@ -41,16 +65,16 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
       data: {
         userId: data.userId,
         scopeType: "global",
-        restrictionType: data.restrictionType,
+        restrictionType: data.type === "mute" ? "temporary_mute" : "permanent_block",
         reason: data.reason,
         startsAt: new Date(),
-        endsAt: data.endsAt ? new Date(data.endsAt) : null,
+        endsAt: data.expiresAt ? new Date(data.expiresAt) : null,
         createdByUserId: request.adminSession!.adminUserId
       }
     });
     await app.prisma.moderationAction.create({
       data: {
-        actionType: "restriction_create",
+        actionType: data.type === "mute" ? "mute_user" : "block_user",
         targetUserId: data.userId,
         performedByUserId: request.adminSession!.adminUserId,
         reason: data.reason ?? null,
@@ -69,8 +93,15 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
     const updated = await app.prisma.userRestriction.update({
       where: { id: restrictionId },
       data: {
-        ...parsed.data,
-        endsAt: parsed.data.endsAt ? new Date(parsed.data.endsAt) : parsed.data.endsAt,
+        restrictionType:
+          parsed.data.type === undefined
+            ? undefined
+            : parsed.data.type === "mute"
+              ? "temporary_mute"
+              : "permanent_block",
+        reason: parsed.data.reason,
+        endsAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : parsed.data.expiresAt,
+        isActive: parsed.data.active,
         updatedByUserId: request.adminSession!.adminUserId
       }
     });
@@ -85,6 +116,13 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
         isActive: false,
         revokedAt: new Date(),
         revokedByUserId: request.adminSession!.adminUserId
+      }
+    });
+    await app.prisma.moderationAction.create({
+      data: {
+        actionType: revoked.restrictionType === "temporary_mute" ? "unmute_user" : "unblock_user",
+        targetUserId: revoked.userId,
+        performedByUserId: request.adminSession!.adminUserId
       }
     });
     return reply.send(revoked);

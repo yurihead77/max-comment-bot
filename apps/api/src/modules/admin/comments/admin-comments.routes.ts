@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { syncPostCommentsCount } from "../../comments/comments.service";
+import { ensureRole } from "../admin-authz";
 
 const patchSchema = z.object({
   action: z.enum(["hide", "unhide", "delete", "restore"]),
@@ -9,20 +10,98 @@ const patchSchema = z.object({
 
 export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", async (request, reply) => {
-    if (!request.adminSession) {
-      return reply.code(401).send({ error: "unauthorized" });
+    if (!ensureRole(request, reply, ["admin", "moderator"])) {
+      return;
     }
   });
 
   app.get("/api/admin/comments", async (request) => {
-    const query = request.query as { status?: "active" | "hidden" | "deleted"; postId?: string };
-    const items = await app.prisma.comment.findMany({
-      where: {
-        ...(query.status ? { status: query.status } : {}),
-        ...(query.postId ? { postId: query.postId } : {})
-      },
-      orderBy: { createdAt: "desc" },
-      include: { author: true, post: true, attachments: true }
+    const query = request.query as {
+      status?: "active" | "hidden" | "deleted";
+      postId?: string;
+      channelId?: string;
+      text?: string;
+      authorUserId?: string;
+      page?: string;
+      pageSize?: string;
+    };
+    const page = Math.max(Number(query.page ?? 1), 1);
+    const pageSize = Math.min(Math.max(Number(query.pageSize ?? 20), 1), 100);
+
+    const where = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.postId ? { postId: query.postId } : {}),
+      ...(query.text
+        ? {
+            text: {
+              contains: query.text,
+              mode: "insensitive" as const
+            }
+          }
+        : {}),
+      ...(query.authorUserId
+        ? {
+            author: {
+              maxUserId: query.authorUserId
+            }
+          }
+        : {}),
+      ...(query.channelId
+        ? {
+            post: {
+              chat: {
+                maxChatId: query.channelId
+              }
+            }
+          }
+        : {})
+    };
+
+    const [total, items] = await Promise.all([
+      app.prisma.comment.count({ where }),
+      app.prisma.comment.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        include: {
+          author: {
+            select: {
+              id: true,
+              maxUserId: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              photoUrl: true
+            }
+          },
+          post: {
+            include: {
+              chat: {
+                select: { id: true, maxChatId: true, title: true, type: true }
+              }
+            }
+          },
+          attachments: true
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize
+      })
+    ]);
+
+    return {
+      items,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(Math.ceil(total / pageSize), 1)
+      }
+    };
+  });
+
+  app.get("/api/admin/channels", async () => {
+    const items = await app.prisma.chat.findMany({
+      select: { id: true, maxChatId: true, title: true, type: true },
+      orderBy: { createdAt: "desc" }
     });
     return { items };
   });
@@ -31,7 +110,16 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
     const { commentId } = request.params as { commentId: string };
     const comment = await app.prisma.comment.findUnique({
       where: { id: commentId },
-      include: { author: true, post: true, attachments: true, editHistory: true }
+      include: {
+        author: true,
+        post: {
+          include: {
+            chat: true
+          }
+        },
+        attachments: true,
+        editHistory: true
+      }
     });
     if (!comment) {
       return reply.code(404).send({ error: "not found" });
@@ -60,7 +148,9 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
           : "deleted";
 
     const updated = await app.prisma.comment.update({
-      where: { id: commentId },
+      where: {
+        id: commentId
+      },
       data: {
         status: nextStatus,
         hiddenAt: nextStatus === "hidden" ? now : null,

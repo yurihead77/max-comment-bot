@@ -13,8 +13,35 @@ export async function adminLogin(email: string, password: string) {
   return response.json();
 }
 
-export async function getAdminComments() {
-  const response = await fetch(`${API_BASE}/admin/comments`, {
+type CommentFilters = {
+  status?: "active" | "hidden" | "deleted";
+  channelId?: string;
+  text?: string;
+  authorUserId?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+function toQuery(params: Record<string, string | number | undefined>) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") {
+      search.set(key, String(value));
+    }
+  }
+  const asString = search.toString();
+  return asString ? `?${asString}` : "";
+}
+
+export async function getAdminComments(filters: CommentFilters = {}) {
+  const response = await fetch(`${API_BASE}/admin/comments${toQuery(filters)}`, {
+    credentials: "include"
+  });
+  return response.json();
+}
+
+export async function getAdminCommentDetails(commentId: string) {
+  const response = await fetch(`${API_BASE}/admin/comments/${commentId}`, {
     credentials: "include"
   });
   return response.json();
@@ -32,8 +59,15 @@ export async function moderateComment(commentId: string, action: "hide" | "unhid
   }
 }
 
-export async function getRestrictions() {
-  const response = await fetch(`${API_BASE}/admin/restrictions`, {
+export async function getChannels() {
+  const response = await fetch(`${API_BASE}/admin/channels`, {
+    credentials: "include"
+  });
+  return response.json();
+}
+
+export async function getRestrictions(filters: { type?: "mute" | "block"; active?: "true" | "false" } = {}) {
+  const response = await fetch(`${API_BASE}/admin/restrictions${toQuery(filters)}`, {
     credentials: "include"
   });
   return response.json();
@@ -41,9 +75,9 @@ export async function getRestrictions() {
 
 export async function createRestriction(payload: {
   userId: string;
-  restrictionType: "temporary_mute" | "permanent_block";
+  type: "mute" | "block";
   reason?: string;
-  endsAt?: string;
+  expiresAt?: string;
 }) {
   const response = await fetch(`${API_BASE}/admin/restrictions`, {
     method: "POST",
@@ -56,9 +90,48 @@ export async function createRestriction(payload: {
   }
 }
 
-export async function getModerationLog() {
-  const response = await fetch(`${API_BASE}/admin/moderation-actions`, {
+export async function revokeRestriction(restrictionId: string) {
+  const response = await fetch(`${API_BASE}/admin/restrictions/${restrictionId}/revoke`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!response.ok) {
+    throw new Error("failed to revoke restriction");
+  }
+}
+
+export async function getModerationLog(filters: { actionType?: string; page?: number; pageSize?: number } = {}) {
+  const response = await fetch(`${API_BASE}/admin/moderation-actions${toQuery(filters)}`, {
     credentials: "include"
   });
   return response.json();
+}
+
+export async function getModerators() {
+  const response = await fetch(`${API_BASE}/admin/moderators`, {
+    credentials: "include"
+  });
+  return response.json();
+}
+
+export async function assignModerator(userId: string) {
+  const response = await fetch(`${API_BASE}/admin/moderators`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId })
+  });
+  if (!response.ok) {
+    throw new Error("failed to assign moderator");
+  }
+}
+
+export async function revokeModerator(userId: string) {
+  const response = await fetch(`${API_BASE}/admin/moderators/${userId}`, {
+    method: "DELETE",
+    credentials: "include"
+  });
+  if (!response.ok) {
+    throw new Error("failed to revoke moderator");
+  }
 }

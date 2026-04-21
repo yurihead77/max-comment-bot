@@ -7,6 +7,7 @@ import fastifyStatic from "@fastify/static";
 import { env } from "./config/env";
 import { adminAuthRoutes } from "./modules/admin/auth/admin-auth.routes";
 import { adminCommentsRoutes } from "./modules/admin/comments/admin-comments.routes";
+import { adminModeratorsRoutes } from "./modules/admin/moderators/admin-moderators.routes";
 import { adminModerationRoutes } from "./modules/admin/moderation/admin-moderation.routes";
 import { adminRestrictionsRoutes } from "./modules/admin/restrictions/admin-restrictions.routes";
 import { maxAuthRoutes } from "./modules/auth/max-auth.routes";
@@ -61,6 +62,7 @@ export async function createApp() {
   await app.register(internalPostsRoutes);
   await app.register(adminAuthRoutes);
   await app.register(adminCommentsRoutes);
+  await app.register(adminModeratorsRoutes);
   await app.register(adminRestrictionsRoutes);
   await app.register(adminModerationRoutes);
 
