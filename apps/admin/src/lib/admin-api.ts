@@ -18,6 +18,7 @@ type CommentFilters = {
   channelId?: string;
   text?: string;
   authorUserId?: string;
+  reportedOnly?: "true" | "false";
   page?: number;
   pageSize?: number;
 };
@@ -134,4 +135,24 @@ export async function revokeModerator(platformUserId: string) {
   if (!response.ok) {
     throw new Error("failed to revoke moderator");
   }
+}
+
+export async function getAdminSettings() {
+  const response = await fetch(`${API_BASE}/admin/settings`, {
+    credentials: "include"
+  });
+  return response.json() as Promise<{ moderationChatId: string | null }>;
+}
+
+export async function patchAdminSettings(body: { moderationChatId: string | null }) {
+  const response = await fetch(`${API_BASE}/admin/settings`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    throw new Error("failed to save settings");
+  }
+  return response.json() as Promise<{ moderationChatId: string | null }>;
 }

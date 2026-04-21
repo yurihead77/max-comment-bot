@@ -303,6 +303,13 @@ export class MaxClient {
     return this.maxJsonFetch("POST", url, body);
   }
 
+  /** Plain text only — no inline keyboard (moderation / service chats). */
+  async sendPlainText(payload: { chatId: string; text: string }) {
+    const url = this.buildMessagesUrl({ chat_id: payload.chatId });
+    const body = { text: payload.text };
+    return this.maxJsonFetch("POST", url, body);
+  }
+
   /**
    * Updates only inline keyboard via official API (PUT /messages?message_id=…).
    * Docs: https://dev.max.ru/docs-api/methods/PUT/messages — `attachments` replaces keyboard when provided.

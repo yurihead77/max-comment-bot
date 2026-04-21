@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { isModerationChat } from "../settings/moderation-chat";
 
 export async function syncPostCommentsCount(app: FastifyInstance, postId: string) {
   const count = await app.prisma.comment.count({
@@ -8,10 +9,15 @@ export async function syncPostCommentsCount(app: FastifyInstance, postId: string
     }
   });
 
-  await app.prisma.post.update({
+  const post = await app.prisma.post.update({
     where: { id: postId },
-    data: { commentsCount: count }
+    data: { commentsCount: count },
+    select: { id: true, chat: { select: { maxChatId: true } } }
   });
+
+  if (await isModerationChat(app.prisma, post.chat.maxChatId)) {
+    return;
+  }
 
   try {
     await app.inject({

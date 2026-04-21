@@ -4,10 +4,11 @@ import { CommentsTable } from "../features/comments/comments-table";
 import { ModlogPage } from "../features/modlog/modlog-page";
 import { ModeratorsPage } from "../features/moderators/moderators-page";
 import { RestrictionsPage } from "../features/restrictions/restrictions-page";
+import { SettingsPage } from "../features/settings/settings-page";
 
 export function Router() {
   const [loggedIn, setLoggedIn] = useState(false);
-  const [tab, setTab] = useState<"comments" | "moderators" | "restrictions" | "modlog">("comments");
+  const [tab, setTab] = useState<"comments" | "moderators" | "restrictions" | "modlog" | "settings">("comments");
 
   if (!loggedIn) {
     return <LoginPage onSuccess={() => setLoggedIn(true)} />;
@@ -21,11 +22,13 @@ export function Router() {
         <button onClick={() => setTab("moderators")}>Moderators</button>
         <button onClick={() => setTab("restrictions")}>Restrictions</button>
         <button onClick={() => setTab("modlog")}>Moderation log</button>
+        <button onClick={() => setTab("settings")}>Settings</button>
       </div>
       {tab === "comments" && <CommentsTable />}
       {tab === "moderators" && <ModeratorsPage />}
       {tab === "restrictions" && <RestrictionsPage />}
       {tab === "modlog" && <ModlogPage />}
+      {tab === "settings" && <SettingsPage />}
     </main>
   );
 }

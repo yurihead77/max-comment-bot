@@ -20,7 +20,7 @@ async function postInternalRegister(
   apiBaseUrl: string,
   body: { chatId: string; messageId: string; botMessageText?: string },
   log: { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void; error: (o: object, m?: string) => void }
-): Promise<{ id?: string; error?: string }> {
+): Promise<{ id?: string; error?: string; skipped?: boolean }> {
   const base = apiBaseUrl.replace(/\/+$/, "");
   const url = `${base}/api/internal/posts/register`;
   try {
@@ -34,7 +34,7 @@ async function postInternalRegister(
       })
     });
     const text = await res.text();
-    let json: { id?: string } = {};
+    let json: { id?: string; skipped?: boolean } = {};
     try {
       json = text ? (JSON.parse(text) as { id?: string }) : {};
     } catch {
@@ -43,6 +43,9 @@ async function postInternalRegister(
     if (!res.ok) {
       log.error({ url, status: res.status, bodyPreview: text.slice(0, 2000) }, "internal POST /api/internal/posts/register failed");
       return { error: `register HTTP ${res.status}` };
+    }
+    if (json && typeof json === "object" && "skipped" in json && (json as { skipped?: boolean }).skipped) {
+      return { skipped: true };
     }
     if (!json.id) {
       log.error({ url, responsePreview: text.slice(0, 500) }, "register response missing id");
@@ -204,6 +207,10 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
         { chatId, messageId, botMessageText: text },
         request.log
       );
+      if (reg.skipped) {
+        request.log.info({ chatId, maxPutMessageId: messageId }, "message_created: skipped (moderation chat — no post registration)");
+        return reply.send({ ok: true, handled: "moderation_chat_skipped", chatId, maxPutMessageId: messageId });
+      }
       if (reg.error || !reg.id) {
         return reply.code(502).send({ ok: false, error: reg.error ?? "register failed" });
       }

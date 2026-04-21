@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useMemo, useState } from "react";
-import { authByDevMock, authByInitData, blockUserByModerator, createComment, deleteOwnComment, getMeRole, getComments, getPost, moderateCommentByModerator, muteUserByModerator, unblockUserByModerator, updateOwnComment, uploadCommentImage } from "../../lib/api-client";
+import { authByDevMock, authByInitData, blockUserByModerator, createComment, deleteOwnComment, reportComment, getMeRole, getComments, getPost, moderateCommentByModerator, muteUserByModerator, unblockUserByModerator, updateOwnComment, uploadCommentImage } from "../../lib/api-client";
 import { getInitDataUnsafeUser, getStartParam, waitForInitData } from "../../lib/max-webapp";
 import { CommentList } from "./comment-list";
 import { RestrictionBanner } from "../restrictions/restriction-banner";
@@ -166,6 +166,14 @@ export function CommentsPage() {
                     if (!window.confirm("Unblock this user?"))
                         return;
                     await unblockUserByModerator(userId, targetUserId);
+                }, onReport: async (c) => {
+                    const reason = window.prompt("Причина жалобы (необязательно)") ?? "";
+                    try {
+                        await reportComment(c.id, userId, reason.trim() || undefined);
+                    }
+                    catch {
+                        window.alert("Не удалось отправить жалобу");
+                    }
                 } })) : (_jsx("div", { className: "comments-app__scroll", children: _jsxs("div", { className: "chat-empty", children: [_jsx("p", { className: "chat-empty__title", children: COMMENT_NO_POST }), _jsx("p", { className: "chat-empty__subtitle", children: "\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u043E\u0431\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0435 \u0438\u0437 \u043F\u043E\u0441\u0442\u0430 \u0432 MAX." })] }) })), canComment && postId && (_jsx(Composer, { editingMessage: editingMessage, replyToMessage: replyToMessage, onCancelReply: () => setReplyToMessage(null), onSubmit: async (text, files) => {
                     const attachmentIds = [];
                     for (const file of files) {

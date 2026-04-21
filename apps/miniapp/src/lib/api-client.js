@@ -61,6 +61,20 @@ export async function updateOwnComment(commentId, userId, text) {
     }
     return response.json();
 }
+export async function reportComment(commentId, userId, reason) {
+    const response = await fetch(`${API_BASE}/comments/${commentId}/report`, {
+        method: "POST",
+        headers: {
+            "content-type": "application/json",
+            "x-user-id": userId
+        },
+        body: JSON.stringify({ reason: reason ?? undefined })
+    });
+    if (!response.ok) {
+        throw new Error("failed to report comment");
+    }
+    return response.json();
+}
 export async function deleteOwnComment(commentId, userId) {
     const response = await fetch(`${API_BASE}/comments/${commentId}`, {
         method: "DELETE",

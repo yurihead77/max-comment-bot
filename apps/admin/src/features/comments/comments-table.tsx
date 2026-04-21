@@ -11,7 +11,8 @@ export function CommentsTable() {
     status: "",
     channelId: "",
     text: "",
-    authorUserId: ""
+    authorUserId: "",
+    reportedOnly: false
   });
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 1 });
@@ -22,6 +23,7 @@ export function CommentsTable() {
       channelId: filters.channelId || undefined,
       text: filters.text || undefined,
       authorUserId: filters.authorUserId || undefined,
+      reportedOnly: filters.reportedOnly ? "true" : undefined,
       page
     });
     setItems(data.items ?? []);
@@ -76,12 +78,21 @@ export function CommentsTable() {
           onChange={(e) => setFilters({ ...filters, authorUserId: e.target.value })}
           placeholder="Author UserID"
         />
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <input
+            type="checkbox"
+            checked={filters.reportedOnly}
+            onChange={(e) => setFilters({ ...filters, reportedOnly: e.target.checked })}
+          />
+          Reported only
+        </label>
         <button type="submit">Apply filters</button>
       </form>
       <table>
         <thead>
           <tr>
             <th>Comment</th>
+            <th>Reports</th>
             <th>Author</th>
             <th>Status</th>
             <th>Channel/Post</th>
@@ -101,6 +112,27 @@ export function CommentsTable() {
                 >
                   {item.text?.slice(0, 80) || item.id}
                 </button>
+              </td>
+              <td>
+                {item.isReported ? (
+                  <span title={`Open reports: ${item.openReportCount ?? 0}`}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: "#fde8e8",
+                        color: "#a40000",
+                        fontSize: 12,
+                        fontWeight: 600
+                      }}
+                    >
+                      Reported ({item.openReportCount ?? 0})
+                    </span>
+                  </span>
+                ) : (
+                  <span className="muted">—</span>
+                )}
               </td>
               <td>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

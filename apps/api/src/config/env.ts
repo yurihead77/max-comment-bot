@@ -64,6 +64,16 @@ const schema = z
   /** Admin session cookie SameSite: lax works across subdomains; strict if admin UI same-site only */
   ADMIN_COOKIE_SAME_SITE: z.enum(["lax", "strict"]).optional(),
   BOT_INTERNAL_BASE_URL: z.string().url().default("http://localhost:3002"),
+  /** Optional public mini app URL for report notifications (e.g. https://comments.example.com). */
+  MINIAPP_PUBLIC_URL: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().url().optional()
+  ),
+  /** Optional public admin panel URL for report notifications. */
+  ADMIN_PANEL_PUBLIC_URL: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().url().optional()
+  ),
   DEV_MAX_AUTH_BYPASS: z
     .string()
     .optional()

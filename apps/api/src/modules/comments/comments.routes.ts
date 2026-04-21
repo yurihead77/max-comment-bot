@@ -4,6 +4,7 @@ import { env } from "../../config/env";
 import { getActiveRestriction } from "../restrictions/restrictions.service";
 import { assertCooldown, assertRateLimit } from "./antispam.service";
 import { syncPostCommentsCount } from "./comments.service";
+import { sendModerationChatReportNotification } from "./comment-report-notify";
 
 const createBodySchema = z.object({
   text: z.string().trim().min(1).max(env.MAX_COMMENT_LENGTH),
@@ -12,6 +13,10 @@ const createBodySchema = z.object({
 
 const updateBodySchema = z.object({
   text: z.string().trim().min(1).max(env.MAX_COMMENT_LENGTH)
+});
+
+const reportBodySchema = z.object({
+  reason: z.string().max(2000).optional()
 });
 
 function getUserId(request: any) {
@@ -168,5 +173,77 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
 
     await syncPostCommentsCount(app, deleted.postId);
     return { ok: true };
+  });
+
+  app.post("/api/comments/:commentId/report", async (request, reply) => {
+    const userId = getUserId(request);
+    if (!userId) {
+      return reply.code(401).send({ error: "x-user-id header is required" });
+    }
+    const { commentId } = request.params as { commentId: string };
+    const parsed = reportBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid request body" });
+    }
+
+    const comment = await app.prisma.comment.findUnique({
+      where: { id: commentId },
+      include: {
+        author: { select: { maxUserId: true, firstName: true, lastName: true, username: true } },
+        post: { include: { chat: { select: { maxChatId: true, title: true } } } }
+      }
+    });
+    if (!comment || comment.status === "deleted") {
+      return reply.code(404).send({ error: "comment not found" });
+    }
+
+    const existing = await app.prisma.commentReport.findUnique({
+      where: {
+        commentId_reporterUserId: {
+          commentId: comment.id,
+          reporterUserId: userId
+        }
+      }
+    });
+    if (existing) {
+      const openReportsCount = await app.prisma.commentReport.count({
+        where: { commentId: comment.id, status: "open" }
+      });
+      return reply.send({ ok: true, duplicate: true, openReportsCount });
+    }
+
+    const openBefore = await app.prisma.commentReport.count({
+      where: { commentId: comment.id, status: "open" }
+    });
+
+    await app.prisma.commentReport.create({
+      data: {
+        commentId: comment.id,
+        reporterUserId: userId,
+        status: "open",
+        reason: parsed.data.reason?.trim() || null
+      }
+    });
+
+    const openReportsCount = openBefore + 1;
+
+    if (openBefore === 0) {
+      const authorParts = [comment.author.firstName, comment.author.lastName].filter(Boolean) as string[];
+      const authorDisplay =
+        authorParts.join(" ").trim() || comment.author.username?.trim() || comment.author.maxUserId;
+      await sendModerationChatReportNotification(app, {
+        commentId: comment.id,
+        postId: comment.postId,
+        channelTitle: comment.post.chat.title,
+        channelMaxChatId: comment.post.chat.maxChatId,
+        postMaxMessageId: comment.post.maxMessageId,
+        authorDisplay,
+        authorMaxUserId: comment.author.maxUserId,
+        commentPreview: comment.text,
+        openReportsCount
+      });
+    }
+
+    return reply.code(201).send({ ok: true, duplicate: false, openReportsCount });
   });
 };

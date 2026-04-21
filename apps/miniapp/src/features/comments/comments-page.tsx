@@ -5,6 +5,7 @@ import {
   blockUserByModerator,
   createComment,
   deleteOwnComment,
+  reportComment,
   getMeRole,
   getComments,
   getPost,
@@ -211,6 +212,14 @@ export function CommentsPage() {
           onUnblockUser={async (targetUserId) => {
             if (!window.confirm("Unblock this user?")) return;
             await unblockUserByModerator(userId, targetUserId);
+          }}
+          onReport={async (c) => {
+            const reason = window.prompt("Причина жалобы (необязательно)") ?? "";
+            try {
+              await reportComment(c.id, userId, reason.trim() || undefined);
+            } catch {
+              window.alert("Не удалось отправить жалобу");
+            }
           }}
         />
       ) : (

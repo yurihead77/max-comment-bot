@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { env } from "../../config/env";
+import { isModerationChat } from "../settings/moderation-chat";
 import { enqueueSyncJob } from "./sync-queue.service";
 
 const registerSchema = z.object({
@@ -23,6 +24,11 @@ export const internalPostsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "invalid body", details: parsed.error.flatten() });
       }
       const { postId, chatId, messageId, botMessageText } = parsed.data;
+
+      if (await isModerationChat(app.prisma, chatId)) {
+        request.log.info({ route: "/api/internal/posts/register", chatId }, "internal register: skipped (moderation chat)");
+        return reply.send({ skipped: true });
+      }
 
       request.log.info(
         {
@@ -106,6 +112,11 @@ export const internalPostsRoutes: FastifyPluginAsync = async (app) => {
       });
       if (!post) {
         return reply.code(404).send({ error: "post not found" });
+      }
+
+      if (await isModerationChat(app.prisma, post.chat.maxChatId)) {
+        request.log.info({ postId, chatId: post.chat.maxChatId }, "sync-button: skipped (moderation chat)");
+        return reply.send({ ok: true, skipped: true });
       }
 
       const buttonText = post.commentsCount > 0 ? `Обсудить (${post.commentsCount})` : "Обсудить";

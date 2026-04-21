@@ -11,7 +11,8 @@ export function CommentsTable() {
         status: "",
         channelId: "",
         text: "",
-        authorUserId: ""
+        authorUserId: "",
+        reportedOnly: false
     });
     const [page, setPage] = useState(1);
     const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 1 });
@@ -21,6 +22,7 @@ export function CommentsTable() {
             channelId: filters.channelId || undefined,
             text: filters.text || undefined,
             authorUserId: filters.authorUserId || undefined,
+            reportedOnly: filters.reportedOnly ? "true" : undefined,
             page
         });
         setItems(data.items ?? []);
@@ -40,11 +42,19 @@ export function CommentsTable() {
                     event.preventDefault();
                     setPage(1);
                     await load();
-                }, children: [_jsxs("select", { value: filters.channelId, onChange: (e) => setFilters({ ...filters, channelId: e.target.value }), children: [_jsx("option", { value: "", children: "All channels" }), channels.map((channel) => (_jsx("option", { value: channel.maxChatId, children: channel.title || channel.maxChatId }, channel.id)))] }), _jsxs("select", { value: filters.status, onChange: (e) => setFilters({ ...filters, status: e.target.value }), children: [_jsx("option", { value: "", children: "All statuses" }), _jsx("option", { value: "active", children: "active" }), _jsx("option", { value: "hidden", children: "hidden" }), _jsx("option", { value: "deleted", children: "deleted" })] }), _jsx("input", { value: filters.text, onChange: (e) => setFilters({ ...filters, text: e.target.value }), placeholder: "Search text" }), _jsx("input", { value: filters.authorUserId, onChange: (e) => setFilters({ ...filters, authorUserId: e.target.value }), placeholder: "Author UserID" }), _jsx("button", { type: "submit", children: "Apply filters" })] }), _jsxs("table", { children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "Comment" }), _jsx("th", { children: "Author" }), _jsx("th", { children: "Status" }), _jsx("th", { children: "Channel/Post" }), _jsx("th", { children: "Actions" })] }) }), _jsx("tbody", { children: items.map((item) => (_jsxs("tr", { children: [_jsx("td", { children: _jsx("button", { onClick: async () => {
+                }, children: [_jsxs("select", { value: filters.channelId, onChange: (e) => setFilters({ ...filters, channelId: e.target.value }), children: [_jsx("option", { value: "", children: "All channels" }), channels.map((channel) => (_jsx("option", { value: channel.maxChatId, children: channel.title || channel.maxChatId }, channel.id)))] }), _jsxs("select", { value: filters.status, onChange: (e) => setFilters({ ...filters, status: e.target.value }), children: [_jsx("option", { value: "", children: "All statuses" }), _jsx("option", { value: "active", children: "active" }), _jsx("option", { value: "hidden", children: "hidden" }), _jsx("option", { value: "deleted", children: "deleted" })] }), _jsx("input", { value: filters.text, onChange: (e) => setFilters({ ...filters, text: e.target.value }), placeholder: "Search text" }), _jsx("input", { value: filters.authorUserId, onChange: (e) => setFilters({ ...filters, authorUserId: e.target.value }), placeholder: "Author UserID" }), _jsxs("label", { style: { display: "inline-flex", alignItems: "center", gap: 6 }, children: [_jsx("input", { type: "checkbox", checked: filters.reportedOnly, onChange: (e) => setFilters({ ...filters, reportedOnly: e.target.checked }) }), "Reported only"] }), _jsx("button", { type: "submit", children: "Apply filters" })] }), _jsxs("table", { children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "Comment" }), _jsx("th", { children: "Reports" }), _jsx("th", { children: "Author" }), _jsx("th", { children: "Status" }), _jsx("th", { children: "Channel/Post" }), _jsx("th", { children: "Actions" })] }) }), _jsx("tbody", { children: items.map((item) => (_jsxs("tr", { children: [_jsx("td", { children: _jsx("button", { onClick: async () => {
                                             setSelected(item);
                                             const details = await getAdminCommentDetails(item.id);
                                             setSelectedDetails(details);
-                                        }, children: item.text?.slice(0, 80) || item.id }) }), _jsx("td", { children: _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [item.author?.photoUrl ? (_jsx("img", { src: item.author.photoUrl, alt: "", width: 24, height: 24, style: { borderRadius: "50%" } })) : null, _jsxs("span", { children: [item.author?.firstName || item.author?.username || "Unknown", " (", item.author?.maxUserId || item.authorId, ")"] })] }) }), _jsx("td", { children: item.status }), _jsxs("td", { children: [item.post?.chat?.title || item.post?.chat?.maxChatId, " / ", item.postId] }), _jsxs("td", { style: { display: "flex", gap: 6 }, children: [_jsx("button", { onClick: async () => {
+                                        }, children: item.text?.slice(0, 80) || item.id }) }), _jsx("td", { children: item.isReported ? (_jsx("span", { title: `Open reports: ${item.openReportCount ?? 0}`, children: _jsxs("span", { style: {
+                                                display: "inline-block",
+                                                padding: "2px 8px",
+                                                borderRadius: 999,
+                                                background: "#fde8e8",
+                                                color: "#a40000",
+                                                fontSize: 12,
+                                                fontWeight: 600
+                                            }, children: ["Reported (", item.openReportCount ?? 0, ")"] }) })) : (_jsx("span", { className: "muted", children: "\u2014" })) }), _jsx("td", { children: _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [item.author?.photoUrl ? (_jsx("img", { src: item.author.photoUrl, alt: "", width: 24, height: 24, style: { borderRadius: "50%" } })) : null, _jsxs("span", { children: [item.author?.firstName || item.author?.username || "Unknown", " (", item.author?.maxUserId || item.authorId, ")"] })] }) }), _jsx("td", { children: item.status }), _jsxs("td", { children: [item.post?.chat?.title || item.post?.chat?.maxChatId, " / ", item.postId] }), _jsxs("td", { style: { display: "flex", gap: 6 }, children: [_jsx("button", { onClick: async () => {
                                                 if (!window.confirm("Hide comment?"))
                                                     return;
                                                 await moderateComment(item.id, "hide");

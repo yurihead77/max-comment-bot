@@ -23,6 +23,7 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
       channelId?: string;
       text?: string;
       authorUserId?: string;
+      reportedOnly?: "true" | "false";
       page?: string;
       pageSize?: string;
     };
@@ -55,6 +56,15 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
               }
             }
           }
+        : {}),
+      ...(query.reportedOnly === "true"
+        ? {
+            reports: {
+              some: {
+                status: "open"
+              }
+            }
+          }
         : {})
     };
 
@@ -81,7 +91,14 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
               }
             }
           },
-          attachments: true
+          attachments: true,
+          _count: {
+            select: {
+              reports: {
+                where: { status: "open" }
+              }
+            }
+          }
         },
         skip: (page - 1) * pageSize,
         take: pageSize
@@ -89,7 +106,11 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
     ]);
 
     return {
-      items,
+      items: items.map(({ _count, ...rest }) => ({
+        ...rest,
+        openReportCount: _count.reports,
+        isReported: _count.reports > 0
+      })),
       pagination: {
         page,
         pageSize,

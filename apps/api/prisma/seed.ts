@@ -13,6 +13,12 @@ async function main() {
     update: { passwordHash, role: "admin", isActive: true },
     create: { email, passwordHash, role: "admin", isActive: true }
   });
+
+  await prisma.appSettings.upsert({
+    where: { id: "default" },
+    create: { id: "default" },
+    update: {}
+  });
 }
 
 main()

@@ -6,6 +6,8 @@ import { maxBotTokenSha256Prefix } from "./max-bot-token-fingerprint";
 import { buildDiscussInlineKeyboardAttachment } from "./max-inline-discuss-keyboard";
 import { MaxApiError, MaxClient } from "./max-client";
 import { normalizeWebAppUrl } from "./normalize-web-app-url";
+import { getInternalAppSettings, isModerationChatId } from "./internal-api-settings";
+import { extractMessageIdFromMessagesApiResponse, truncateJson } from "./max-webhook-payload";
 import { PostPublisherService } from "./post-publisher.service";
 import { webhookRoutes } from "./webhook.routes";
 
@@ -118,6 +120,12 @@ async function bootstrap() {
       messageId: string;
       buttonText: string;
     };
+
+    const settings = await getInternalAppSettings(apiBaseUrl);
+    if (isModerationChatId(settings, body.chatId)) {
+      app.log.info({ postId: body.postId, chatId: body.chatId }, "internal sync-button: skipped (moderation chat)");
+      return reply.send({ ok: true, skipped: true });
+    }
 
     const mid = typeof body.messageId === "string" ? body.messageId.trim() : "";
     if (!mid) {
@@ -331,6 +339,29 @@ async function bootstrap() {
   app.post("/internal/publish", async (request, reply) => {
     const body = request.body as { postId: string; chatId: string; text: string };
     try {
+      const settings = await getInternalAppSettings(apiBaseUrl);
+      if (isModerationChatId(settings, body.chatId)) {
+        if (env.BOT_MOCK_MAX_API && env.NODE_ENV === "development") {
+          app.log.info({ route: "/internal/publish", chatId: body.chatId }, "BOT_MOCK_MAX_API: skip plain send");
+          return reply.send({ messageId: "mock", moderationChatPlainMessage: true });
+        }
+        const published = (await maxClient.sendPlainText({
+          chatId: body.chatId,
+          text: body.text
+        })) as Record<string, unknown>;
+        const messageId = extractMessageIdFromMessagesApiResponse(published) ?? "";
+        if (!messageId) {
+          throw new Error(
+            `sendPlainText: no message id in MAX POST /messages response: ${truncateJson(published, 2500)}`
+          );
+        }
+        request.log.info(
+          { route: "/internal/publish", chatId: body.chatId, maxPutMessageId: messageId },
+          "internal publish: moderation chat — plain text only (no register / discuss buttons)"
+        );
+        return reply.send({ messageId, moderationChatPlainMessage: true });
+      }
+
       const result = await postPublisher.publishPost(body);
       request.log.info(
         {
@@ -346,6 +377,27 @@ async function bootstrap() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       request.log.error({ err: msg, postId: body.postId, chatId: body.chatId }, "internal publish failed");
+      return reply.code(502).send({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/internal/send-plain-message", async (request, reply) => {
+    const body = request.body as { chatId?: string; text?: string };
+    const chatId = typeof body.chatId === "string" ? body.chatId.trim() : "";
+    const text = typeof body.text === "string" ? body.text : "";
+    if (!chatId || !text) {
+      return reply.code(400).send({ ok: false, error: "chatId and text required" });
+    }
+    try {
+      if (env.BOT_MOCK_MAX_API && env.NODE_ENV === "development") {
+        app.log.info({ route: "/internal/send-plain-message", chatId, textLen: text.length }, "BOT_MOCK_MAX_API: skip plain send");
+        return reply.send({ ok: true, mocked: true });
+      }
+      await maxClient.sendPlainText({ chatId, text });
+      return reply.send({ ok: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      app.log.error({ err: msg, chatId }, "internal send-plain-message failed");
       return reply.code(502).send({ ok: false, error: msg });
     }
   });

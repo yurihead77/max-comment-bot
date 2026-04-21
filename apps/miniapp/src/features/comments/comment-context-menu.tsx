@@ -69,6 +69,7 @@ export interface CommentContextMenuProps {
   onBlockUser: (targetUserId: string) => void | Promise<void>;
   onUnblockUser: (targetUserId: string) => void | Promise<void>;
   targetModerationState: { isSelf: boolean; isTargetModerator: boolean; isMuted: boolean; isBlocked: boolean } | null;
+  onReport: (comment: CommentItemModel) => void | Promise<void>;
 }
 
 export function CommentContextMenu({
@@ -88,7 +89,8 @@ export function CommentContextMenu({
   onMuteUser,
   onBlockUser,
   onUnblockUser,
-  targetModerationState
+  targetModerationState,
+  onReport
 }: CommentContextMenuProps) {
   const open = Boolean(comment && anchor);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -178,8 +180,10 @@ export function CommentContextMenu({
   };
 
   const report = () => {
-    console.log("report comment", { commentId: comment.id, authorId: comment.authorId, postId });
-    onClose();
+    void (async () => {
+      await Promise.resolve(onReport(comment));
+      onClose();
+    })();
   };
 
   const est = estimateMenuHeight(own);

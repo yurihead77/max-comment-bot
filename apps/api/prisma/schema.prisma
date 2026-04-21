@@ -28,6 +28,19 @@ enum AdminRole {
   moderator
 }
 
+enum ReportStatus {
+  open
+  dismissed
+}
+
+model AppSettings {
+  id                   String   @id @default("default")
+  moderationChatMaxId String?  @map("moderation_chat_max_id")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
 model User {
   id         String   @id @default(cuid())
   maxUserId  String   @unique @map("max_user_id")
@@ -38,9 +51,10 @@ model User {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  comments     Comment[]
-  restrictions UserRestriction[]
-  moderator    Moderator?
+  comments       Comment[]
+  restrictions   UserRestriction[]
+  moderator      Moderator?
+  commentReports CommentReport[] @relation("CommentReportReporter")
 
   @@map("users")
 }
@@ -104,9 +118,26 @@ model Comment {
   author      User                 @relation(fields: [authorId], references: [id], onDelete: Restrict)
   attachments CommentAttachment[]
   editHistory CommentEditHistory[]
+  reports     CommentReport[]
 
   @@index([postId, status, createdAt])
   @@map("comments")
+}
+
+model CommentReport {
+  id               String       @id @default(cuid())
+  commentId        String       @map("comment_id")
+  reporterUserId   String       @map("reporter_user_id")
+  status           ReportStatus @default(open)
+  reason           String?
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  comment  Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reporter User    @relation("CommentReportReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+
+  @@unique([commentId, reporterUserId])
+  @@index([commentId, status])
+  @@map("comment_reports")
 }
 
 model CommentAttachment {

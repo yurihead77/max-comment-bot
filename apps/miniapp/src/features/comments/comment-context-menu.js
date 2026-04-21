@@ -32,7 +32,7 @@ function estimateMenuHeight(own) {
     const padding = 12;
     return reactionBar + rows * row + padding;
 }
-export function CommentContextMenu({ comment, anchor, currentUserId, postId, reactionCounts, userReaction, onToggleReaction, onClose, onReply, onEdit, onDelete, canModerate, onModerateDelete, onMuteUser, onBlockUser, onUnblockUser, targetModerationState }) {
+export function CommentContextMenu({ comment, anchor, currentUserId, postId, reactionCounts, userReaction, onToggleReaction, onClose, onReply, onEdit, onDelete, canModerate, onModerateDelete, onMuteUser, onBlockUser, onUnblockUser, targetModerationState, onReport }) {
     const open = Boolean(comment && anchor);
     const popoverRef = useRef(null);
     const [popoverStyle, setPopoverStyle] = useState(undefined);
@@ -116,8 +116,10 @@ export function CommentContextMenu({ comment, anchor, currentUserId, postId, rea
         onClose();
     };
     const report = () => {
-        console.log("report comment", { commentId: comment.id, authorId: comment.authorId, postId });
-        onClose();
+        void (async () => {
+            await Promise.resolve(onReport(comment));
+            onClose();
+        })();
     };
     const est = estimateMenuHeight(own);
     const fallbackStyle = {

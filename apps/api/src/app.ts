@@ -12,6 +12,8 @@ import { adminModerationRoutes } from "./modules/admin/moderation/admin-moderati
 import { adminRestrictionsRoutes } from "./modules/admin/restrictions/admin-restrictions.routes";
 import { maxAuthRoutes } from "./modules/auth/max-auth.routes";
 import { commentsRoutes } from "./modules/comments/comments.routes";
+import { adminSettingsRoutes } from "./modules/admin/settings/admin-settings.routes";
+import { internalAppSettingsRoutes } from "./modules/internal/internal-app-settings.routes";
 import { internalPostsRoutes } from "./modules/internal/internal-posts.routes";
 import { meRoutes } from "./modules/me/me.routes";
 import { postsRoutes } from "./modules/posts/posts.routes";
@@ -63,12 +65,14 @@ export async function createApp() {
   await app.register(postsRoutes);
   await app.register(commentsRoutes);
   await app.register(uploadsRoutes);
+  await app.register(internalAppSettingsRoutes);
   await app.register(internalPostsRoutes);
   await app.register(adminAuthRoutes);
   await app.register(adminCommentsRoutes);
   await app.register(adminModeratorsRoutes);
   await app.register(adminRestrictionsRoutes);
   await app.register(adminModerationRoutes);
+  await app.register(adminSettingsRoutes);
 
   app.get("/healthz", async () => ({ ok: true }));
 
