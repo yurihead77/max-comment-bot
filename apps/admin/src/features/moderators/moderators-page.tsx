@@ -15,7 +15,7 @@ export function ModeratorsPage() {
   }, []);
 
   return (
-    <section style={{ display: "grid", gap: 8 }}>
+    <section className="card" style={{ display: "grid", gap: 8 }}>
       <h2>Moderators</h2>
       <form
         onSubmit={async (event) => {

@@ -42,7 +42,7 @@ export function CommentsTable() {
   }, []);
 
   return (
-    <section style={{ display: "grid", gap: 8 }}>
+    <section className="card" style={{ display: "grid", gap: 10 }}>
       <h2>Comments moderation</h2>
       <form
         style={{ display: "flex", gap: 8, flexWrap: "wrap" }}

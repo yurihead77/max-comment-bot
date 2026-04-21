@@ -36,7 +36,7 @@ export function CommentsTable() {
     useEffect(() => {
         void loadChannels();
     }, []);
-    return (_jsxs("section", { style: { display: "grid", gap: 8 }, children: [_jsx("h2", { children: "Comments moderation" }), _jsxs("form", { style: { display: "flex", gap: 8, flexWrap: "wrap" }, onSubmit: async (event) => {
+    return (_jsxs("section", { className: "card", style: { display: "grid", gap: 10 }, children: [_jsx("h2", { children: "Comments moderation" }), _jsxs("form", { style: { display: "flex", gap: 8, flexWrap: "wrap" }, onSubmit: async (event) => {
                     event.preventDefault();
                     setPage(1);
                     await load();

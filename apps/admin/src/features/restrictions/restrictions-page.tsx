@@ -17,7 +17,7 @@ export function RestrictionsPage() {
   }, []);
 
   return (
-    <section style={{ display: "grid", gap: 8 }}>
+    <section className="card" style={{ display: "grid", gap: 8 }}>
       <h2>Global restrictions</h2>
       <form
         onSubmit={async (event) => {
@@ -40,7 +40,8 @@ export function RestrictionsPage() {
       <ul>
         {items.map((item) => (
           <li key={item.id}>
-            {item.userId} - {item.type} - {item.active ? "active" : "inactive"} - by {item.createdBy} at{" "}
+            {item.userId} ({item.user?.maxUserId || "no maxUserId"}) - {item.type} - {item.active ? "active" : "inactive"} - by{" "}
+            {item.createdBy} at{" "}
             {new Date(item.createdAt).toLocaleString()}
             {item.active ? (
               <button

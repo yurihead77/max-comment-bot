@@ -14,12 +14,14 @@ export function ModlogPage() {
   }, [page]);
 
   return (
-    <section>
+    <section className="card">
       <h2>Moderation log</h2>
       <ul>
         {items.map((item) => (
           <li key={item.id}>
-            {item.actionType} - by {item.performedByUserId} - {new Date(item.createdAt).toLocaleString()}
+            {item.actionType} - by {item.performedByUserId}
+            {item.metadataJson?.platformUserId ? ` (MAX: ${item.metadataJson.platformUserId})` : ""} -{" "}
+            {new Date(item.createdAt).toLocaleString()}
           </li>
         ))}
       </ul>

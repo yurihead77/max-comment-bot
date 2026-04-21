@@ -11,7 +11,7 @@ export function ModeratorsPage() {
     useEffect(() => {
         void load();
     }, []);
-    return (_jsxs("section", { style: { display: "grid", gap: 8 }, children: [_jsx("h2", { children: "Moderators" }), _jsxs("form", { onSubmit: async (event) => {
+    return (_jsxs("section", { className: "card", style: { display: "grid", gap: 8 }, children: [_jsx("h2", { children: "Moderators" }), _jsxs("form", { onSubmit: async (event) => {
                     event.preventDefault();
                     await assignModerator(platformUserId.trim());
                     setPlatformUserId("");

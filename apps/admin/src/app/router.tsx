@@ -14,9 +14,9 @@ export function Router() {
   }
 
   return (
-    <main style={{ padding: 16, display: "grid", gap: 12 }}>
-      <h1>Admin panel</h1>
-      <div style={{ display: "flex", gap: 8 }}>
+    <main className="admin-shell">
+      <h1 className="admin-title">Admin panel</h1>
+      <div className="admin-tabs">
         <button onClick={() => setTab("comments")}>Comments</button>
         <button onClick={() => setTab("moderators")}>Moderators</button>
         <button onClick={() => setTab("restrictions")}>Restrictions</button>

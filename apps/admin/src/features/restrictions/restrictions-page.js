@@ -13,11 +13,11 @@ export function RestrictionsPage() {
     useEffect(() => {
         void load();
     }, []);
-    return (_jsxs("section", { style: { display: "grid", gap: 8 }, children: [_jsx("h2", { children: "Global restrictions" }), _jsxs("form", { onSubmit: async (event) => {
+    return (_jsxs("section", { className: "card", style: { display: "grid", gap: 8 }, children: [_jsx("h2", { children: "Global restrictions" }), _jsxs("form", { onSubmit: async (event) => {
                     event.preventDefault();
                     await createRestriction({ userId, type: restrictionType, reason });
                     await load();
-                }, children: [_jsx("input", { value: userId, onChange: (e) => setUserId(e.target.value), placeholder: "User ID" }), _jsxs("select", { value: restrictionType, onChange: (e) => setRestrictionType(e.target.value), children: [_jsx("option", { value: "mute", children: "mute" }), _jsx("option", { value: "block", children: "block" })] }), _jsx("input", { value: reason, onChange: (e) => setReason(e.target.value), placeholder: "Reason" }), _jsx("button", { type: "submit", children: "Add restriction" })] }), _jsx("ul", { children: items.map((item) => (_jsxs("li", { children: [item.userId, " - ", item.type, " - ", item.active ? "active" : "inactive", " - by ", item.createdBy, " at", " ", new Date(item.createdAt).toLocaleString(), item.active ? (_jsx("button", { onClick: async () => {
+                }, children: [_jsx("input", { value: userId, onChange: (e) => setUserId(e.target.value), placeholder: "User ID" }), _jsxs("select", { value: restrictionType, onChange: (e) => setRestrictionType(e.target.value), children: [_jsx("option", { value: "mute", children: "mute" }), _jsx("option", { value: "block", children: "block" })] }), _jsx("input", { value: reason, onChange: (e) => setReason(e.target.value), placeholder: "Reason" }), _jsx("button", { type: "submit", children: "Add restriction" })] }), _jsx("ul", { children: items.map((item) => (_jsxs("li", { children: [item.userId, " (", item.user?.maxUserId || "no maxUserId", ") - ", item.type, " - ", item.active ? "active" : "inactive", " - by", " ", item.createdBy, " at", " ", new Date(item.createdAt).toLocaleString(), item.active ? (_jsx("button", { onClick: async () => {
                                 if (!window.confirm("Revoke restriction?"))
                                     return;
                                 await revokeRestriction(item.id);
