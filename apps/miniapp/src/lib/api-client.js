@@ -1,6 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 export async function authByInitData(initData) {
-    const response = await fetch(`${API_BASE}/api/auth/max/init`, {
+    const response = await fetch(`${API_BASE}/auth/max/init`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ initData })
@@ -12,7 +12,7 @@ export async function authByInitData(initData) {
     return response.json();
 }
 export async function authByDevMock(payload) {
-    const response = await fetch(`${API_BASE}/api/auth/max/init`, {
+    const response = await fetch(`${API_BASE}/auth/max/init`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ devMock: payload })
@@ -24,17 +24,17 @@ export async function authByDevMock(payload) {
     return response.json();
 }
 export async function getPost(postId, userId) {
-    const response = await fetch(`${API_BASE}/api/posts/${postId}`, {
+    const response = await fetch(`${API_BASE}/posts/${postId}`, {
         headers: { "x-user-id": userId }
     });
     return response.json();
 }
 export async function getComments(postId) {
-    const response = await fetch(`${API_BASE}/api/posts/${postId}/comments`);
+    const response = await fetch(`${API_BASE}/posts/${postId}/comments`);
     return response.json();
 }
 export async function createComment(postId, userId, text, attachmentIds = []) {
-    const response = await fetch(`${API_BASE}/api/posts/${postId}/comments`, {
+    const response = await fetch(`${API_BASE}/posts/${postId}/comments`, {
         method: "POST",
         headers: {
             "content-type": "application/json",
@@ -48,7 +48,7 @@ export async function createComment(postId, userId, text, attachmentIds = []) {
     return response.json();
 }
 export async function updateOwnComment(commentId, userId, text) {
-    const response = await fetch(`${API_BASE}/api/comments/${commentId}`, {
+    const response = await fetch(`${API_BASE}/comments/${commentId}`, {
         method: "PATCH",
         headers: {
             "content-type": "application/json",
@@ -62,7 +62,7 @@ export async function updateOwnComment(commentId, userId, text) {
     return response.json();
 }
 export async function deleteOwnComment(commentId, userId) {
-    const response = await fetch(`${API_BASE}/api/comments/${commentId}`, {
+    const response = await fetch(`${API_BASE}/comments/${commentId}`, {
         method: "DELETE",
         headers: { "x-user-id": userId }
     });
@@ -73,7 +73,7 @@ export async function deleteOwnComment(commentId, userId) {
 export async function uploadCommentImage(file) {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch(`${API_BASE}/api/uploads/comment-image`, {
+    const response = await fetch(`${API_BASE}/uploads/comment-image`, {
         method: "POST",
         body: formData
     });
@@ -83,7 +83,7 @@ export async function uploadCommentImage(file) {
     return response.json();
 }
 export async function getMeRole(userId) {
-    const response = await fetch(`${API_BASE}/api/me/role`, {
+    const response = await fetch(`${API_BASE}/me/role`, {
         headers: { "x-user-id": userId }
     });
     if (!response.ok) {
@@ -92,7 +92,7 @@ export async function getMeRole(userId) {
     return response.json();
 }
 export async function moderateCommentByModerator(userId, commentId, action) {
-    const response = await fetch(`${API_BASE}/api/moderation/comments/${commentId}/${action}`, {
+    const response = await fetch(`${API_BASE}/moderation/comments/${commentId}/${action}`, {
         method: "POST",
         headers: { "x-user-id": userId }
     });
@@ -102,7 +102,7 @@ export async function moderateCommentByModerator(userId, commentId, action) {
     return response.json();
 }
 export async function muteUserByModerator(userId, targetUserId) {
-    const response = await fetch(`${API_BASE}/api/moderation/users/${targetUserId}/mute`, {
+    const response = await fetch(`${API_BASE}/moderation/users/${targetUserId}/mute`, {
         method: "POST",
         headers: { "x-user-id": userId }
     });
@@ -111,7 +111,7 @@ export async function muteUserByModerator(userId, targetUserId) {
     }
 }
 export async function blockUserByModerator(userId, targetUserId) {
-    const response = await fetch(`${API_BASE}/api/moderation/users/${targetUserId}/block`, {
+    const response = await fetch(`${API_BASE}/moderation/users/${targetUserId}/block`, {
         method: "POST",
         headers: { "x-user-id": userId }
     });
@@ -120,7 +120,7 @@ export async function blockUserByModerator(userId, targetUserId) {
     }
 }
 export async function unblockUserByModerator(userId, targetUserId) {
-    const response = await fetch(`${API_BASE}/api/moderation/users/${targetUserId}/unblock`, {
+    const response = await fetch(`${API_BASE}/moderation/users/${targetUserId}/unblock`, {
         method: "POST",
         headers: { "x-user-id": userId }
     });
@@ -129,7 +129,7 @@ export async function unblockUserByModerator(userId, targetUserId) {
     }
 }
 export async function getModerationUserState(actorUserId, targetUserId) {
-    const response = await fetch(`${API_BASE}/api/moderation/users/${targetUserId}/state`, {
+    const response = await fetch(`${API_BASE}/moderation/users/${targetUserId}/state`, {
         headers: { "x-user-id": actorUserId }
     });
     if (!response.ok) {
