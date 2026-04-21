@@ -3,11 +3,7 @@ import Fastify from "fastify";
 import { z } from "zod";
 import { runDevPolling } from "./dev-polling";
 import { maxBotTokenSha256Prefix } from "./max-bot-token-fingerprint";
-import {
-  buildDiscussInlineKeyboardAttachment,
-  buildModerationActionsOnlyKeyboardAttachment,
-  buildModerationCardKeyboardAttachment
-} from "./max-inline-discuss-keyboard";
+import { buildDiscussInlineKeyboardAttachment, buildModerationActionsOnlyKeyboardAttachment } from "./max-inline-discuss-keyboard";
 import { MaxApiError, MaxClient } from "./max-client";
 import { normalizeWebAppUrl } from "./normalize-web-app-url";
 import { getInternalAppSettings, isModerationChatId } from "./internal-api-settings";
@@ -413,37 +409,19 @@ async function bootstrap() {
         return reply.send({ ok: true, mocked: true });
       }
       if (withModerationCard) {
-        try {
-          const sent = (await maxClient.sendMessage({
-            chatId,
-            text,
-            attachments: [
-              buildModerationCardKeyboardAttachment({
-                openAppWebApp: env.MAX_OPEN_APP_ID,
-                openAppContactId: env.MAX_OPEN_APP_CONTACT_ID,
-                reportId
-              })
-            ]
-          })) as Record<string, unknown>;
-          const messageId = extractMessageIdFromMessagesApiResponse(sent) ?? "";
-          return reply.send({ ok: true, messageId });
-        } catch (e) {
-          // Fallback: send action card + separate open_app message
-          app.log.warn({ err: e instanceof Error ? e.message : String(e) }, "moderation card: mixed keyboard failed; fallback to 2 messages");
-          const sent1 = (await maxClient.sendMessage({
-            chatId,
-            text,
-            attachments: [buildModerationActionsOnlyKeyboardAttachment({ reportId })]
-          })) as Record<string, unknown>;
-          const msg1 = extractMessageIdFromMessagesApiResponse(sent1) ?? "";
-          const sent2 = (await maxClient.sendMessage({
-            chatId,
-            text: "Открыть жалобу",
-            attachments: [maxClient.openAppOnlyKeyboardAttachment("Открыть жалобу", `report_${reportId}`)]
-          })) as Record<string, unknown>;
-          const msg2 = extractMessageIdFromMessagesApiResponse(sent2) ?? "";
-          return reply.send({ ok: true, fallback: true, messageId: msg1, openAppMessageId: msg2 });
-        }
+        const sentActions = (await maxClient.sendMessage({
+          chatId,
+          text,
+          attachments: [buildModerationActionsOnlyKeyboardAttachment({ reportId })]
+        })) as Record<string, unknown>;
+        const actionsMessageId = extractMessageIdFromMessagesApiResponse(sentActions) ?? "";
+        const sentOpenApp = (await maxClient.sendMessage({
+          chatId,
+          text: "Открыть жалобу",
+          attachments: [maxClient.openAppOnlyKeyboardAttachment("Открыть жалобу", `report_${reportId}`)]
+        })) as Record<string, unknown>;
+        const openAppMessageId = extractMessageIdFromMessagesApiResponse(sentOpenApp) ?? "";
+        return reply.send({ ok: true, messageId: actionsMessageId, openAppMessageId });
       }
       if (withOpenApp) {
         await maxClient.publishPost({ chatId, text, buttonText, startParam });
