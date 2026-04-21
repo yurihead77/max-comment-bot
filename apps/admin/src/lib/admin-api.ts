@@ -1,7 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export async function adminLogin(email: string, password: string) {
-  const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
+  const response = await fetch(`${API_BASE}/admin/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
@@ -14,14 +14,14 @@ export async function adminLogin(email: string, password: string) {
 }
 
 export async function getAdminComments() {
-  const response = await fetch(`${API_BASE}/api/admin/comments`, {
+  const response = await fetch(`${API_BASE}/admin/comments`, {
     credentials: "include"
   });
   return response.json();
 }
 
 export async function moderateComment(commentId: string, action: "hide" | "unhide" | "delete" | "restore") {
-  const response = await fetch(`${API_BASE}/api/admin/comments/${commentId}`, {
+  const response = await fetch(`${API_BASE}/admin/comments/${commentId}`, {
     method: "PATCH",
     credentials: "include",
     headers: { "content-type": "application/json" },
@@ -33,7 +33,7 @@ export async function moderateComment(commentId: string, action: "hide" | "unhid
 }
 
 export async function getRestrictions() {
-  const response = await fetch(`${API_BASE}/api/admin/restrictions`, {
+  const response = await fetch(`${API_BASE}/admin/restrictions`, {
     credentials: "include"
   });
   return response.json();
@@ -45,7 +45,7 @@ export async function createRestriction(payload: {
   reason?: string;
   endsAt?: string;
 }) {
-  const response = await fetch(`${API_BASE}/api/admin/restrictions`, {
+  const response = await fetch(`${API_BASE}/admin/restrictions`, {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
@@ -57,7 +57,7 @@ export async function createRestriction(payload: {
 }
 
 export async function getModerationLog() {
-  const response = await fetch(`${API_BASE}/api/admin/moderation-actions`, {
+  const response = await fetch(`${API_BASE}/admin/moderation-actions`, {
     credentials: "include"
   });
   return response.json();
