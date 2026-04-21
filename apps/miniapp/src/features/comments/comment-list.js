@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { CommentContextMenu } from "./comment-context-menu";
 import { CommentItem } from "./comment-item";
 import { COMMENT_EMPTY_SUBTITLE, COMMENT_EMPTY_TITLE } from "./comment-ui-strings";
+import { MessageList } from "./message-list";
 export function CommentList({ comments, currentUserId, selfDisplayHint, postId, onEdit, onDelete, onReply }) {
     const scrollRef = useRef(null);
     const [menu, setMenu] = useState(null);
@@ -35,12 +36,13 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
     const empty = comments.length === 0;
     const menuId = menu?.comment.id;
     const menuReactions = menuId ? reactions[menuId] : undefined;
-    return (_jsxs(_Fragment, { children: [_jsx("div", { className: "comments-app__scroll", ref: scrollRef, children: empty ? (_jsxs("div", { className: "chat-empty", "aria-live": "polite", children: [_jsx("p", { className: "chat-empty__title", children: COMMENT_EMPTY_TITLE }), _jsx("p", { className: "chat-empty__subtitle", children: COMMENT_EMPTY_SUBTITLE })] })) : (_jsx("ul", { className: "chat-list", children: comments.map((comment, index) => {
+    return (_jsxs(_Fragment, { children: [_jsx("div", { className: "comments-app__scroll", ref: scrollRef, children: empty ? (_jsxs("div", { className: "chat-empty", "aria-live": "polite", children: [_jsx("p", { className: "chat-empty__title", children: COMMENT_EMPTY_TITLE }), _jsx("p", { className: "chat-empty__subtitle", children: COMMENT_EMPTY_SUBTITLE })] })) : (_jsx(MessageList, { comments: comments, renderMessage: (comment, index) => {
                         const prev = comments[index - 1];
                         const grouped = Boolean(prev && prev.authorId === comment.authorId);
                         const showAvatar = !grouped;
-                        return (_jsx(CommentItem, { comment: comment, currentUserId: currentUserId, selfDisplayHint: selfDisplayHint, showAvatar: showAvatar, groupedWithPrevious: grouped, onOpenMenu: (c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y }) }, comment.id));
-                    }) })) }), _jsx(CommentContextMenu, { comment: menu?.comment ?? null, anchor: menu ? { x: menu.x, y: menu.y } : null, currentUserId: currentUserId, postId: postId, reactionCounts: menuReactions?.counts ?? {}, userReaction: menuReactions?.pick, onToggleReaction: menuId
+                        const reactionState = reactions[comment.id];
+                        return (_jsx(CommentItem, { comment: comment, currentUserId: currentUserId, selfDisplayHint: selfDisplayHint, showAvatar: showAvatar, groupedWithPrevious: grouped, onOpenMenu: (c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y }), reactionState: reactionState, onToggleReaction: (emoji) => toggleReaction(comment.id, emoji) }, comment.id));
+                    } })) }), _jsx(CommentContextMenu, { comment: menu?.comment ?? null, anchor: menu ? { x: menu.x, y: menu.y } : null, currentUserId: currentUserId, postId: postId, reactionCounts: menuReactions?.counts ?? {}, userReaction: menuReactions?.pick, onToggleReaction: menuId
                     ? (emoji) => {
                         toggleReaction(menuId, emoji);
                     }

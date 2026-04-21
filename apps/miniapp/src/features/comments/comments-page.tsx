@@ -10,12 +10,11 @@ import {
   uploadCommentImage
 } from "../../lib/api-client";
 import { getInitDataUnsafeUser, getStartParam, waitForInitData } from "../../lib/max-webapp";
-import { CommentInput } from "./comment-input";
 import { CommentList } from "./comment-list";
-import { ReplyPreview } from "./reply-preview";
 import type { CommentItemModel } from "./comment-item";
 import { RestrictionBanner } from "../restrictions/restriction-banner";
 import { COMMENT_NO_POST } from "./comment-ui-strings";
+import { Composer } from "./composer";
 import "./comments-chat.css";
 
 function hintFromInitDataUnsafeUser(): string | null {
@@ -66,6 +65,26 @@ export function CommentsPage() {
     }));
     setComments(mapped);
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const root = document.documentElement;
+    const updateVh = () => {
+      const vv = window.visualViewport;
+      const h = vv?.height ?? window.innerHeight;
+      root.style.setProperty("--app-vh", `${h}px`);
+    };
+    updateVh();
+    window.addEventListener("resize", updateVh);
+    window.visualViewport?.addEventListener("resize", updateVh);
+    window.visualViewport?.addEventListener("scroll", updateVh);
+    return () => {
+      window.removeEventListener("resize", updateVh);
+      window.visualViewport?.removeEventListener("resize", updateVh);
+      window.visualViewport?.removeEventListener("scroll", updateVh);
+      root.style.removeProperty("--app-vh");
+    };
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -173,33 +192,27 @@ export function CommentsPage() {
         </div>
       )}
       {canComment && postId && (
-        <div className="comments-app__composer">
-          {!editingMessage ? (
-            <ReplyPreview replyTo={replyToMessage} onCancel={() => setReplyToMessage(null)} />
-          ) : null}
-          <CommentInput
-            submitLabel={editingMessage ? "Сохранить" : "Отправить"}
-            initialText={editingMessage?.text ?? ""}
-            replyTo={editingMessage ? null : replyToMessage}
-            onCancelReply={() => setReplyToMessage(null)}
-            onSubmit={async (text, files) => {
-              const attachmentIds: string[] = [];
-              for (const file of files) {
-                const uploaded = await uploadCommentImage(file);
-                attachmentIds.push(uploaded.id);
-              }
+        <Composer
+          editingMessage={editingMessage}
+          replyToMessage={replyToMessage}
+          onCancelReply={() => setReplyToMessage(null)}
+          onSubmit={async (text, files) => {
+            const attachmentIds: string[] = [];
+            for (const file of files) {
+              const uploaded = await uploadCommentImage(file);
+              attachmentIds.push(uploaded.id);
+            }
 
-              if (editingMessage) {
-                await updateOwnComment(editingMessage.id, userId, text);
-                setEditingMessage(null);
-              } else {
-                await createComment(postId, userId, text, attachmentIds);
-                setReplyToMessage(null);
-              }
-              await reloadComments(postId);
-            }}
-          />
-        </div>
+            if (editingMessage) {
+              await updateOwnComment(editingMessage.id, userId, text);
+              setEditingMessage(null);
+            } else {
+              await createComment(postId, userId, text, attachmentIds);
+              setReplyToMessage(null);
+            }
+            await reloadComments(postId);
+          }}
+        />
       )}
     </div>
   );

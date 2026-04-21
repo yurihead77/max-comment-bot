@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CommentContextMenu } from "./comment-context-menu";
 import { CommentItem, type CommentItemModel } from "./comment-item";
 import { COMMENT_EMPTY_SUBTITLE, COMMENT_EMPTY_TITLE } from "./comment-ui-strings";
+import { MessageList } from "./message-list";
 
 interface CommentListProps {
   comments: CommentItemModel[];
@@ -65,11 +66,13 @@ export function CommentList({
             <p className="chat-empty__subtitle">{COMMENT_EMPTY_SUBTITLE}</p>
           </div>
         ) : (
-          <ul className="chat-list">
-            {comments.map((comment, index) => {
+          <MessageList
+            comments={comments}
+            renderMessage={(comment, index) => {
               const prev = comments[index - 1];
               const grouped = Boolean(prev && prev.authorId === comment.authorId);
               const showAvatar = !grouped;
+              const reactionState = reactions[comment.id];
               return (
                 <CommentItem
                   key={comment.id}
@@ -79,10 +82,12 @@ export function CommentList({
                   showAvatar={showAvatar}
                   groupedWithPrevious={grouped}
                   onOpenMenu={(c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y })}
+                  reactionState={reactionState}
+                  onToggleReaction={(emoji) => toggleReaction(comment.id, emoji)}
                 />
               );
-            })}
-          </ul>
+            }}
+          />
         )}
       </div>
       <CommentContextMenu

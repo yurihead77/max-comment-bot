@@ -2,11 +2,10 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useMemo, useState } from "react";
 import { authByDevMock, authByInitData, createComment, deleteOwnComment, getComments, getPost, updateOwnComment, uploadCommentImage } from "../../lib/api-client";
 import { getInitDataUnsafeUser, getStartParam, waitForInitData } from "../../lib/max-webapp";
-import { CommentInput } from "./comment-input";
 import { CommentList } from "./comment-list";
-import { ReplyPreview } from "./reply-preview";
 import { RestrictionBanner } from "../restrictions/restriction-banner";
 import { COMMENT_NO_POST } from "./comment-ui-strings";
+import { Composer } from "./composer";
 import "./comments-chat.css";
 function hintFromInitDataUnsafeUser() {
     const u = getInitDataUnsafeUser();
@@ -57,6 +56,26 @@ export function CommentsPage() {
         }));
         setComments(mapped);
     }
+    useEffect(() => {
+        if (typeof window === "undefined")
+            return;
+        const root = document.documentElement;
+        const updateVh = () => {
+            const vv = window.visualViewport;
+            const h = vv?.height ?? window.innerHeight;
+            root.style.setProperty("--app-vh", `${h}px`);
+        };
+        updateVh();
+        window.addEventListener("resize", updateVh);
+        window.visualViewport?.addEventListener("resize", updateVh);
+        window.visualViewport?.addEventListener("scroll", updateVh);
+        return () => {
+            window.removeEventListener("resize", updateVh);
+            window.visualViewport?.removeEventListener("resize", updateVh);
+            window.visualViewport?.removeEventListener("scroll", updateVh);
+            root.style.removeProperty("--app-vh");
+        };
+    }, []);
     useEffect(() => {
         async function init() {
             setLoading(true);
@@ -122,20 +141,20 @@ export function CommentsPage() {
                 }, onDelete: async (commentId) => {
                     await deleteOwnComment(commentId, userId);
                     await reloadComments(postId);
-                } })) : (_jsx("div", { className: "comments-app__scroll", children: _jsxs("div", { className: "chat-empty", children: [_jsx("p", { className: "chat-empty__title", children: COMMENT_NO_POST }), _jsx("p", { className: "chat-empty__subtitle", children: "\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u043E\u0431\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0435 \u0438\u0437 \u043F\u043E\u0441\u0442\u0430 \u0432 MAX." })] }) })), canComment && postId && (_jsxs("div", { className: "comments-app__composer", children: [!editingMessage ? (_jsx(ReplyPreview, { replyTo: replyToMessage, onCancel: () => setReplyToMessage(null) })) : null, _jsx(CommentInput, { submitLabel: editingMessage ? "Сохранить" : "Отправить", initialText: editingMessage?.text ?? "", replyTo: editingMessage ? null : replyToMessage, onCancelReply: () => setReplyToMessage(null), onSubmit: async (text, files) => {
-                            const attachmentIds = [];
-                            for (const file of files) {
-                                const uploaded = await uploadCommentImage(file);
-                                attachmentIds.push(uploaded.id);
-                            }
-                            if (editingMessage) {
-                                await updateOwnComment(editingMessage.id, userId, text);
-                                setEditingMessage(null);
-                            }
-                            else {
-                                await createComment(postId, userId, text, attachmentIds);
-                                setReplyToMessage(null);
-                            }
-                            await reloadComments(postId);
-                        } })] }))] }));
+                } })) : (_jsx("div", { className: "comments-app__scroll", children: _jsxs("div", { className: "chat-empty", children: [_jsx("p", { className: "chat-empty__title", children: COMMENT_NO_POST }), _jsx("p", { className: "chat-empty__subtitle", children: "\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u043E\u0431\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0435 \u0438\u0437 \u043F\u043E\u0441\u0442\u0430 \u0432 MAX." })] }) })), canComment && postId && (_jsx(Composer, { editingMessage: editingMessage, replyToMessage: replyToMessage, onCancelReply: () => setReplyToMessage(null), onSubmit: async (text, files) => {
+                    const attachmentIds = [];
+                    for (const file of files) {
+                        const uploaded = await uploadCommentImage(file);
+                        attachmentIds.push(uploaded.id);
+                    }
+                    if (editingMessage) {
+                        await updateOwnComment(editingMessage.id, userId, text);
+                        setEditingMessage(null);
+                    }
+                    else {
+                        await createComment(postId, userId, text, attachmentIds);
+                        setReplyToMessage(null);
+                    }
+                    await reloadComments(postId);
+                } }))] }));
 }

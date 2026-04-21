@@ -1,4 +1,6 @@
 import { useCallback, useRef } from "react";
+import { MessageBubble } from "./message-bubble";
+import { ReactionBar, type ReactionState } from "./reaction-bar";
 
 const LONG_PRESS_MS = 450;
 const MOVE_CANCEL_PX = 12;
@@ -47,11 +49,6 @@ function initials(name: string): string {
   return w.slice(0, 2).toUpperCase();
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-}
-
 export interface CommentItemProps {
   comment: CommentItemModel;
   currentUserId: string;
@@ -59,6 +56,8 @@ export interface CommentItemProps {
   showAvatar: boolean;
   groupedWithPrevious: boolean;
   onOpenMenu: (comment: CommentItemModel, anchor: { x: number; y: number }) => void;
+  reactionState?: ReactionState;
+  onToggleReaction: (emoji: string) => void;
 }
 
 export function CommentItem({
@@ -67,7 +66,9 @@ export function CommentItem({
   selfDisplayHint,
   showAvatar,
   groupedWithPrevious,
-  onOpenMenu
+  onOpenMenu,
+  reactionState,
+  onToggleReaction
 }: CommentItemProps) {
   const own = comment.authorId === currentUserId;
   const name = resolveDisplayName(comment, currentUserId, selfDisplayHint);
@@ -163,11 +164,12 @@ export function CommentItem({
     (groupedWithPrevious ? " chat-row--grouped" : "");
 
   return (
-    <li
+    <div
       className={rowClass}
       data-comment-id={comment.id}
       data-author-id={comment.authorId}
       data-user-id={comment.authorId}
+      role="listitem"
     >
       <div className="chat-bubble-wrap">
         <div className="chat-avatar-slot" aria-hidden={!showAvatar}>
@@ -181,39 +183,25 @@ export function CommentItem({
             </div>
           ) : null}
         </div>
-        <div
-          className={"chat-bubble " + (own ? "chat-bubble--own" : "chat-bubble--other")}
-          onClick={onBubbleClick}
-          onContextMenu={onContextMenu}
-          onPointerDown={onPointerDown}
-          onPointerUp={clearLongPress}
-          onPointerCancel={clearLongPress}
-          onPointerLeave={clearLongPress}
-          onTouchMove={onTouchMove}
-        >
-          <button
-            type="button"
-            className="chat-bubble__menu-hit"
-            aria-label="Меню сообщения"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-              openAt(r.left + r.width / 2, r.bottom);
-            }}
-          >
-            ⋯
-          </button>
-          <div className="chat-bubble__meta">
-            <span className="chat-bubble__name">{name}</span>
-            <span className="chat-bubble__time">
-              {formatTime(comment.createdAt)}
-              {comment.isEdited ? " · изменено" : ""}
-            </span>
-          </div>
-          <p className="chat-bubble__text">{comment.text}</p>
+        <div className="chat-message-stack">
+          <MessageBubble
+            own={own}
+            name={name}
+            text={comment.text}
+            createdAt={comment.createdAt}
+            isEdited={comment.isEdited}
+            onOpenMenuAt={openAt}
+            onClick={onBubbleClick}
+            onContextMenu={onContextMenu}
+            onPointerDown={onPointerDown}
+            onPointerUp={clearLongPress}
+            onPointerCancel={clearLongPress}
+            onPointerLeave={clearLongPress}
+            onTouchMove={onTouchMove}
+          />
+          <ReactionBar state={reactionState} onToggleReaction={onToggleReaction} />
         </div>
       </div>
-    </li>
+    </div>
   );
 }
