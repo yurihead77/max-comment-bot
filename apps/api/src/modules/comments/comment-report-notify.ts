@@ -20,6 +20,7 @@ function buildAdminUrl(): string | undefined {
 export async function sendModerationChatReportNotification(
   app: FastifyInstance,
   args: {
+    reportId: string;
     commentId: string;
     postId: string;
     channelTitle: string | null;
@@ -53,12 +54,20 @@ export async function sendModerationChatReportNotification(
   ].filter(Boolean) as string[];
 
   const text = lines.join("\n");
+  const startParam = `report_${args.reportId}`;
   const botUrl = `${env.BOT_INTERNAL_BASE_URL.replace(/\/$/, "")}/internal/send-plain-message`;
   try {
     const res = await fetch(botUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ chatId: moderationChatMaxId, text })
+      body: JSON.stringify({
+        chatId: moderationChatMaxId,
+        text,
+        openAppButton: {
+          text: "Открыть жалобу",
+          startParam
+        }
+      })
     });
     if (!res.ok) {
       const bodyText = await res.text();

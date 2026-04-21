@@ -55,6 +55,8 @@ export interface CommentItemProps {
   selfDisplayHint?: string | null;
   showAvatar: boolean;
   groupedWithPrevious: boolean;
+  reportHighlight?: boolean;
+  reportBadge?: { openCount: number; linkedReportClosed: boolean };
   onOpenMenu: (comment: CommentItemModel, anchor: { x: number; y: number }) => void;
   reactionState?: ReactionState;
   onToggleReaction: (emoji: string) => void;
@@ -66,6 +68,8 @@ export function CommentItem({
   selfDisplayHint,
   showAvatar,
   groupedWithPrevious,
+  reportHighlight,
+  reportBadge,
   onOpenMenu,
   reactionState,
   onToggleReaction
@@ -161,7 +165,8 @@ export function CommentItem({
   const rowClass =
     "chat-row" +
     (own ? " chat-row--own" : "") +
-    (groupedWithPrevious ? " chat-row--grouped" : "");
+    (groupedWithPrevious ? " chat-row--grouped" : "") +
+    (reportHighlight ? " chat-row--report-target" : "");
 
   return (
     <div
@@ -184,6 +189,17 @@ export function CommentItem({
           ) : null}
         </div>
         <div className="chat-message-stack">
+          {reportBadge ? (
+            <div className="chat-report-badge" aria-label="Жалоба">
+              <span className="chat-report-badge__label">Жалоба</span>
+              {reportBadge.openCount > 0 ? (
+                <span className="chat-report-badge__count">{reportBadge.openCount}</span>
+              ) : null}
+              {reportBadge.linkedReportClosed ? (
+                <span className="chat-report-badge__muted"> · обработана</span>
+              ) : null}
+            </div>
+          ) : null}
           <MessageBubble
             own={own}
             name={name}

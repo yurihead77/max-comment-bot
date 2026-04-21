@@ -25,14 +25,14 @@ function clampPopoverBox(anchor, menuWidth, menuHeight) {
     top = clamp(top, MARGIN, Math.max(MARGIN, maxTop));
     return { left, top, width: w, maxHeight: maxH };
 }
-function estimateMenuHeight(own) {
+function estimateMenuHeight(own, extraModerationRows = 0) {
     const reactionBar = 48;
     const row = 44;
     const rows = own ? 5 : 4;
     const padding = 12;
-    return reactionBar + rows * row + padding;
+    return reactionBar + (rows + extraModerationRows) * row + padding;
 }
-export function CommentContextMenu({ comment, anchor, currentUserId, postId, reactionCounts, userReaction, onToggleReaction, onClose, onReply, onEdit, onDelete, canModerate, onModerateDelete, onMuteUser, onBlockUser, onUnblockUser, targetModerationState, onReport }) {
+export function CommentContextMenu({ comment, anchor, currentUserId, postId, reactionCounts, userReaction, onToggleReaction, onClose, onReply, onEdit, onDelete, canModerate, onModerateDelete, onMuteUser, onBlockUser, onUnblockUser, targetModerationState, onReport, reportModMenu }) {
     const open = Boolean(comment && anchor);
     const popoverRef = useRef(null);
     const [popoverStyle, setPopoverStyle] = useState(undefined);
@@ -43,6 +43,7 @@ export function CommentContextMenu({ comment, anchor, currentUserId, postId, rea
         Boolean(moderationState) &&
         !moderationState?.isSelf &&
         !moderationState?.isTargetModerator;
+    const showReportResolveKeep = Boolean(reportModMenu?.onResolveKeep && canShowModeratorActions);
     useLayoutEffect(() => {
         if (!open || !anchor) {
             setPopoverStyle(undefined);
@@ -53,7 +54,7 @@ export function CommentContextMenu({ comment, anchor, currentUserId, postId, rea
             return;
         const apply = () => {
             const rect = node.getBoundingClientRect();
-            const h = rect.height || estimateMenuHeight(own);
+            const h = rect.height || estimateMenuHeight(own, showReportResolveKeep ? 1 : 0);
             const w = rect.width || POPOVER_W;
             const box = clampPopoverBox(anchor, w, h);
             setPopoverStyle({
@@ -79,7 +80,7 @@ export function CommentContextMenu({ comment, anchor, currentUserId, postId, rea
             ro?.disconnect();
             window.removeEventListener("resize", apply);
         };
-    }, [open, anchor, own, comment?.id]);
+    }, [open, anchor, own, comment?.id, showReportResolveKeep]);
     useEffect(() => {
         if (!open)
             return;
@@ -121,7 +122,7 @@ export function CommentContextMenu({ comment, anchor, currentUserId, postId, rea
             onClose();
         })();
     };
-    const est = estimateMenuHeight(own);
+    const est = estimateMenuHeight(own, showReportResolveKeep ? 1 : 0);
     const fallbackStyle = {
         position: "fixed",
         left: clamp(anchor.x - POPOVER_W / 2, MARGIN, window.innerWidth - POPOVER_W - MARGIN),
@@ -148,7 +149,12 @@ export function CommentContextMenu({ comment, anchor, currentUserId, postId, rea
                                                 await Promise.resolve(onDelete(comment.id));
                                                 onClose();
                                             })();
-                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\uD83D\uDDD1" }), _jsx("span", { children: COMMENT_CTX_DELETE })] })] })) : null, canShowModeratorActions ? (_jsxs(_Fragment, { children: [_jsxs("button", { type: "button", className: "ctx-row ctx-row--danger", onClick: () => {
+                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\uD83D\uDDD1" }), _jsx("span", { children: COMMENT_CTX_DELETE })] })] })) : null, canShowModeratorActions ? (_jsxs(_Fragment, { children: [showReportResolveKeep ? (_jsxs("button", { type: "button", className: "ctx-row ctx-row--accent", onClick: () => {
+                                            void (async () => {
+                                                await Promise.resolve(reportModMenu?.onResolveKeep());
+                                                onClose();
+                                            })();
+                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\u2713" }), _jsx("span", { children: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0436\u0430\u043B\u043E\u0431\u0443 (\u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C)" })] })) : null, _jsxs("button", { type: "button", className: "ctx-row ctx-row--danger", onClick: () => {
                                             void (async () => {
                                                 await Promise.resolve(onModerateDelete(comment.id));
                                                 onClose();

@@ -4,6 +4,7 @@ import { env } from "../../config/env";
 import { getActiveRestriction } from "../restrictions/restrictions.service";
 import { assertCooldown, assertRateLimit } from "./antispam.service";
 import { syncPostCommentsCount } from "./comments.service";
+import { resolveOpenReportsForComment } from "../admin/moderation/comment-reports.service";
 import { sendModerationChatReportNotification } from "./comment-report-notify";
 
 const createBodySchema = z.object({
@@ -26,11 +27,16 @@ function getUserId(request: any) {
 export const commentsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/api/posts/:postId/comments", async (request, reply) => {
     const { postId } = request.params as { postId: string };
-    const query = request.query as { cursor?: string; limit?: string };
+    const query = request.query as { cursor?: string; limit?: string; includeHidden?: string };
     const limit = Math.min(Number(query.limit ?? 20), 50);
+    const includeHidden =
+      query.includeHidden === "true" && Boolean(request.platformUser?.isModerator);
 
     const comments = await app.prisma.comment.findMany({
-      where: { postId, status: "active" },
+      where: {
+        postId,
+        status: includeHidden ? { in: ["active", "hidden"] } : "active"
+      },
       orderBy: { createdAt: "asc" },
       ...(query.cursor
         ? {
@@ -171,6 +177,7 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
       }
     });
 
+    await resolveOpenReportsForComment(app.prisma, comment.id, "resolved_delete");
     await syncPostCommentsCount(app, deleted.postId);
     return { ok: true };
   });
@@ -209,14 +216,14 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
       const openReportsCount = await app.prisma.commentReport.count({
         where: { commentId: comment.id, status: "open" }
       });
-      return reply.send({ ok: true, duplicate: true, openReportsCount });
+      return reply.send({ ok: true, duplicate: true, openReportsCount, reportId: existing.id });
     }
 
     const openBefore = await app.prisma.commentReport.count({
       where: { commentId: comment.id, status: "open" }
     });
 
-    await app.prisma.commentReport.create({
+    const created = await app.prisma.commentReport.create({
       data: {
         commentId: comment.id,
         reporterUserId: userId,
@@ -232,6 +239,7 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
       const authorDisplay =
         authorParts.join(" ").trim() || comment.author.username?.trim() || comment.author.maxUserId;
       await sendModerationChatReportNotification(app, {
+        reportId: created.id,
         commentId: comment.id,
         postId: comment.postId,
         channelTitle: comment.post.chat.title,
@@ -244,6 +252,6 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    return reply.code(201).send({ ok: true, duplicate: false, openReportsCount });
+    return reply.code(201).send({ ok: true, duplicate: false, openReportsCount, reportId: created.id });
   });
 };

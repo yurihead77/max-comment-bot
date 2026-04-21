@@ -29,8 +29,30 @@ export async function getPost(postId, userId) {
     });
     return response.json();
 }
-export async function getComments(postId) {
-    const response = await fetch(`${API_BASE}/posts/${postId}/comments`);
+export async function getComments(postId, opts) {
+    const q = opts?.includeHidden ? "?includeHidden=true" : "";
+    const response = await fetch(`${API_BASE}/posts/${postId}/comments${q}`);
+    return response.json();
+}
+export async function getModerationReportContext(reportId, userId) {
+    const response = await fetch(`${API_BASE}/moderation/reports/${encodeURIComponent(reportId)}/context`, {
+        headers: { "x-user-id": userId }
+    });
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`report context failed: ${response.status} ${errText}`);
+    }
+    return response.json();
+}
+export async function resolveModerationReportKeep(reportId, userId) {
+    const response = await fetch(`${API_BASE}/moderation/reports/${encodeURIComponent(reportId)}/resolve-keep`, {
+        method: "POST",
+        headers: { "x-user-id": userId }
+    });
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`resolve keep failed: ${response.status} ${errText}`);
+    }
     return response.json();
 }
 export async function createComment(postId, userId, text, attachmentIds = []) {

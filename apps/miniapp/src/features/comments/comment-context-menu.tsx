@@ -43,12 +43,12 @@ function clampPopoverBox(
   return { left, top, width: w, maxHeight: maxH };
 }
 
-function estimateMenuHeight(own: boolean): number {
+function estimateMenuHeight(own: boolean, extraModerationRows = 0): number {
   const reactionBar = 48;
   const row = 44;
   const rows = own ? 5 : 4;
   const padding = 12;
-  return reactionBar + rows * row + padding;
+  return reactionBar + (rows + extraModerationRows) * row + padding;
 }
 
 export interface CommentContextMenuProps {
@@ -70,6 +70,8 @@ export interface CommentContextMenuProps {
   onUnblockUser: (targetUserId: string) => void | Promise<void>;
   targetModerationState: { isSelf: boolean; isTargetModerator: boolean; isMuted: boolean; isBlocked: boolean } | null;
   onReport: (comment: CommentItemModel) => void | Promise<void>;
+  /** When opened from report deep-link on the anchor comment — «оставить комментарий». */
+  reportModMenu?: { onResolveKeep: () => void | Promise<void> } | null;
 }
 
 export function CommentContextMenu({
@@ -90,7 +92,8 @@ export function CommentContextMenu({
   onBlockUser,
   onUnblockUser,
   targetModerationState,
-  onReport
+  onReport,
+  reportModMenu
 }: CommentContextMenuProps) {
   const open = Boolean(comment && anchor);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -104,6 +107,8 @@ export function CommentContextMenu({
     !moderationState?.isSelf &&
     !moderationState?.isTargetModerator;
 
+  const showReportResolveKeep = Boolean(reportModMenu?.onResolveKeep && canShowModeratorActions);
+
   useLayoutEffect(() => {
     if (!open || !anchor) {
       setPopoverStyle(undefined);
@@ -114,7 +119,7 @@ export function CommentContextMenu({
 
     const apply = () => {
       const rect = node.getBoundingClientRect();
-      const h = rect.height || estimateMenuHeight(own);
+      const h = rect.height || estimateMenuHeight(own, showReportResolveKeep ? 1 : 0);
       const w = rect.width || POPOVER_W;
       const box = clampPopoverBox(anchor, w, h);
       setPopoverStyle({
@@ -141,7 +146,7 @@ export function CommentContextMenu({
       ro?.disconnect();
       window.removeEventListener("resize", apply);
     };
-  }, [open, anchor, own, comment?.id]);
+  }, [open, anchor, own, comment?.id, showReportResolveKeep]);
 
   useEffect(() => {
     if (!open) return;
@@ -186,7 +191,7 @@ export function CommentContextMenu({
     })();
   };
 
-  const est = estimateMenuHeight(own);
+  const est = estimateMenuHeight(own, showReportResolveKeep ? 1 : 0);
   const fallbackStyle: CSSProperties = {
     position: "fixed",
     left: clamp(anchor.x - POPOVER_W / 2, MARGIN, window.innerWidth - POPOVER_W - MARGIN),
@@ -295,6 +300,23 @@ export function CommentContextMenu({
           ) : null}
           {canShowModeratorActions ? (
             <>
+              {showReportResolveKeep ? (
+                <button
+                  type="button"
+                  className="ctx-row ctx-row--accent"
+                  onClick={() => {
+                    void (async () => {
+                      await Promise.resolve(reportModMenu?.onResolveKeep());
+                      onClose();
+                    })();
+                  }}
+                >
+                  <span className="ctx-row__icon" aria-hidden>
+                    ✓
+                  </span>
+                  <span>Закрыть жалобу (оставить)</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="ctx-row ctx-row--danger"

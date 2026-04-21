@@ -382,18 +382,33 @@ async function bootstrap() {
   });
 
   app.post("/internal/send-plain-message", async (request, reply) => {
-    const body = request.body as { chatId?: string; text?: string };
+    const body = request.body as {
+      chatId?: string;
+      text?: string;
+      openAppButton?: { text?: string; startParam?: string };
+    };
     const chatId = typeof body.chatId === "string" ? body.chatId.trim() : "";
     const text = typeof body.text === "string" ? body.text : "";
     if (!chatId || !text) {
       return reply.code(400).send({ ok: false, error: "chatId and text required" });
     }
+    const btn = body.openAppButton;
+    const buttonText = typeof btn?.text === "string" ? btn.text.trim() : "";
+    const startParam = typeof btn?.startParam === "string" ? btn.startParam.trim() : "";
+    const withOpenApp = Boolean(buttonText && startParam);
     try {
       if (env.BOT_MOCK_MAX_API && env.NODE_ENV === "development") {
-        app.log.info({ route: "/internal/send-plain-message", chatId, textLen: text.length }, "BOT_MOCK_MAX_API: skip plain send");
+        app.log.info(
+          { route: "/internal/send-plain-message", chatId, textLen: text.length, withOpenApp },
+          "BOT_MOCK_MAX_API: skip plain send"
+        );
         return reply.send({ ok: true, mocked: true });
       }
-      await maxClient.sendPlainText({ chatId, text });
+      if (withOpenApp) {
+        await maxClient.publishPost({ chatId, text, buttonText, startParam });
+      } else {
+        await maxClient.sendPlainText({ chatId, text });
+      }
       return reply.send({ ok: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

@@ -10,6 +10,13 @@ interface CommentListProps {
   currentUserId: string;
   selfDisplayHint?: string | null;
   postId: string;
+  highlightCommentId?: string;
+  reportBadge?: {
+    commentId: string;
+    openCount: number;
+    linkedReportClosed: boolean;
+  };
+  reportModMenu?: { anchorCommentId: string; onResolveKeep: () => void | Promise<void> };
   onEdit: (comment: CommentItemModel) => void;
   onDelete: (commentId: string) => void | Promise<void>;
   onReply: (comment: CommentItemModel) => void;
@@ -26,6 +33,9 @@ export function CommentList({
   currentUserId,
   selfDisplayHint,
   postId,
+  highlightCommentId,
+  reportBadge,
+  reportModMenu,
   onEdit,
   onDelete,
   onReply,
@@ -53,6 +63,14 @@ export function CommentList({
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [comments.length, comments[comments.length - 1]?.id]);
+
+  useEffect(() => {
+    if (!highlightCommentId || !scrollRef.current) return;
+    const row = scrollRef.current.querySelector(`[data-comment-id="${highlightCommentId}"]`);
+    if (row) {
+      row.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [highlightCommentId, comments]);
 
   const toggleReaction = (commentId: string, emoji: string) => {
     setReactions((prev) => {
@@ -120,6 +138,14 @@ export function CommentList({
               const grouped = Boolean(prev && prev.authorId === comment.authorId);
               const showAvatar = !grouped;
               const reactionState = reactions[comment.id];
+              const badge =
+                reportBadge && reportBadge.commentId === comment.id
+                  ? {
+                      openCount: reportBadge.openCount,
+                      linkedReportClosed: reportBadge.linkedReportClosed
+                    }
+                  : undefined;
+              const rowHighlight = highlightCommentId === comment.id;
               return (
                 <CommentItem
                   key={comment.id}
@@ -128,6 +154,8 @@ export function CommentList({
                   selfDisplayHint={selfDisplayHint}
                   showAvatar={showAvatar}
                   groupedWithPrevious={grouped}
+                  reportHighlight={rowHighlight}
+                  reportBadge={badge}
                   onOpenMenu={(c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y })}
                   reactionState={reactionState}
                   onToggleReaction={(emoji) => toggleReaction(comment.id, emoji)}
@@ -168,6 +196,11 @@ export function CommentList({
         onUnblockUser={(id) => void onUnblockUser(id)}
         targetModerationState={targetModerationState}
         onReport={(c) => void onReport(c)}
+        reportModMenu={
+          reportModMenu && menu?.comment && menu.comment.id === reportModMenu.anchorCommentId
+            ? { onResolveKeep: reportModMenu.onResolveKeep }
+            : undefined
+        }
       />
     </>
   );

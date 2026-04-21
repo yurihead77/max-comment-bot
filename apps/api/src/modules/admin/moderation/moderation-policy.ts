@@ -43,3 +43,22 @@ export async function ensureCanModerateTargetUser(
 
   return { ok: true };
 }
+
+/** For read-only moderation UI (e.g. report deep-link) without sending HTTP errors. */
+export async function getCanModerateTargetUser(
+  request: FastifyRequest,
+  targetUserId: string
+): Promise<{ canModerate: boolean }> {
+  if (request.adminSession) {
+    return { canModerate: true };
+  }
+  const actor = request.platformUser;
+  if (!actor?.isModerator) {
+    return { canModerate: false };
+  }
+  const targetInfo = await getModerationTargetInfo(request, targetUserId);
+  if (targetInfo.isSelf || targetInfo.isTargetModerator) {
+    return { canModerate: false };
+  }
+  return { canModerate: true };
+}

@@ -5,7 +5,7 @@ import { CommentContextMenu } from "./comment-context-menu";
 import { CommentItem } from "./comment-item";
 import { COMMENT_EMPTY_SUBTITLE, COMMENT_EMPTY_TITLE } from "./comment-ui-strings";
 import { MessageList } from "./message-list";
-export function CommentList({ comments, currentUserId, selfDisplayHint, postId, onEdit, onDelete, onReply, canModerate, onModerateDelete, onMuteUser, onBlockUser, onUnblockUser, onReport }) {
+export function CommentList({ comments, currentUserId, selfDisplayHint, postId, highlightCommentId, reportBadge, reportModMenu, onEdit, onDelete, onReply, canModerate, onModerateDelete, onMuteUser, onBlockUser, onUnblockUser, onReport }) {
     const scrollRef = useRef(null);
     const [menu, setMenu] = useState(null);
     const [targetModerationState, setTargetModerationState] = useState(null);
@@ -16,6 +16,14 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
             return;
         el.scrollTop = el.scrollHeight;
     }, [comments.length, comments[comments.length - 1]?.id]);
+    useEffect(() => {
+        if (!highlightCommentId || !scrollRef.current)
+            return;
+        const row = scrollRef.current.querySelector(`[data-comment-id="${highlightCommentId}"]`);
+        if (row) {
+            row.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+    }, [highlightCommentId, comments]);
     const toggleReaction = (commentId, emoji) => {
         setReactions((prev) => {
             const curEntry = prev[commentId] ?? { counts: {} };
@@ -71,7 +79,14 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
                         const grouped = Boolean(prev && prev.authorId === comment.authorId);
                         const showAvatar = !grouped;
                         const reactionState = reactions[comment.id];
-                        return (_jsx(CommentItem, { comment: comment, currentUserId: currentUserId, selfDisplayHint: selfDisplayHint, showAvatar: showAvatar, groupedWithPrevious: grouped, onOpenMenu: (c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y }), reactionState: reactionState, onToggleReaction: (emoji) => toggleReaction(comment.id, emoji) }, comment.id));
+                        const badge = reportBadge && reportBadge.commentId === comment.id
+                            ? {
+                                openCount: reportBadge.openCount,
+                                linkedReportClosed: reportBadge.linkedReportClosed
+                            }
+                            : undefined;
+                        const rowHighlight = highlightCommentId === comment.id;
+                        return (_jsx(CommentItem, { comment: comment, currentUserId: currentUserId, selfDisplayHint: selfDisplayHint, showAvatar: showAvatar, groupedWithPrevious: grouped, reportHighlight: rowHighlight, reportBadge: badge, onOpenMenu: (c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y }), reactionState: reactionState, onToggleReaction: (emoji) => toggleReaction(comment.id, emoji) }, comment.id));
                     } })) }), _jsx(CommentContextMenu, { comment: menu?.comment ?? null, anchor: menu ? { x: menu.x, y: menu.y } : null, currentUserId: currentUserId, postId: postId, reactionCounts: menuReactions?.counts ?? {}, userReaction: menuReactions?.pick, onToggleReaction: menuId
                     ? (emoji) => {
                         toggleReaction(menuId, emoji);
@@ -82,5 +97,7 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
                 }, onEdit: (c) => {
                     onEdit(c);
                     setMenu(null);
-                }, onDelete: (id) => void onDelete(id), canModerate: canModerate, onModerateDelete: (id) => void onModerateDelete(id), onMuteUser: (id) => void onMuteUser(id), onBlockUser: (id) => void onBlockUser(id), onUnblockUser: (id) => void onUnblockUser(id), targetModerationState: targetModerationState, onReport: (c) => void onReport(c) })] }));
+                }, onDelete: (id) => void onDelete(id), canModerate: canModerate, onModerateDelete: (id) => void onModerateDelete(id), onMuteUser: (id) => void onMuteUser(id), onBlockUser: (id) => void onBlockUser(id), onUnblockUser: (id) => void onUnblockUser(id), targetModerationState: targetModerationState, onReport: (c) => void onReport(c), reportModMenu: reportModMenu && menu?.comment && menu.comment.id === reportModMenu.anchorCommentId
+                    ? { onResolveKeep: reportModMenu.onResolveKeep }
+                    : undefined })] }));
 }

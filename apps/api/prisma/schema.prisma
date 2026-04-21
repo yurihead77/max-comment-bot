@@ -31,6 +31,8 @@ enum AdminRole {
 enum ReportStatus {
   open
   dismissed
+  resolved_keep
+  resolved_delete
 }
 
 model AppSettings {

@@ -1,6 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useMemo, useState } from "react";
-import { authByDevMock, authByInitData, blockUserByModerator, createComment, deleteOwnComment, reportComment, getMeRole, getComments, getPost, moderateCommentByModerator, muteUserByModerator, unblockUserByModerator, updateOwnComment, uploadCommentImage } from "../../lib/api-client";
+import { authByDevMock, authByInitData, blockUserByModerator, createComment, deleteOwnComment, reportComment, getMeRole, getComments, getPost, getModerationReportContext, moderateCommentByModerator, muteUserByModerator, resolveModerationReportKeep, unblockUserByModerator, updateOwnComment, uploadCommentImage } from "../../lib/api-client";
+import { parseReportIdFromStartParam } from "../../lib/report-deeplink";
 import { getInitDataUnsafeUser, getStartParam, waitForInitData } from "../../lib/max-webapp";
 import { CommentList } from "./comment-list";
 import { RestrictionBanner } from "../restrictions/restriction-banner";
@@ -30,6 +31,7 @@ export function CommentsPage() {
     const [selfDisplayHint, setSelfDisplayHint] = useState(null);
     const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
     const [role, setRole] = useState("user");
+    const [reportDeepLink, setReportDeepLink] = useState(null);
     function toBootstrapErrorMessage(error) {
         if (!(error instanceof Error))
             return "Ошибка загрузки данных";
@@ -45,8 +47,12 @@ export function CommentsPage() {
         }
         return error.message || "Ошибка загрузки данных";
     }
-    async function reloadComments(currentPostId) {
-        const response = await getComments(currentPostId);
+    async function refreshReportContext(reportId, uid) {
+        const ctx = await getModerationReportContext(reportId, uid);
+        setReportDeepLink({ reportId, context: ctx });
+    }
+    async function reloadComments(currentPostId, includeHidden) {
+        const response = await getComments(currentPostId, includeHidden ? { includeHidden: true } : undefined);
         const mapped = response.items.map((c) => ({
             id: c.id,
             text: c.text,
@@ -85,7 +91,10 @@ export function CommentsPage() {
                 const startParam = getStartParam();
                 const query = new URLSearchParams(window.location.search);
                 const postFromQuery = query.get("postId") ?? import.meta.env.VITE_DEV_POST_ID ?? "";
-                const resolvedPostId = (startParam?.replace(/^post_/, "") || postFromQuery || "").trim();
+                const reportIdFromDeepLink = parseReportIdFromStartParam(startParam);
+                const resolvedPostId = reportIdFromDeepLink
+                    ? ""
+                    : (startParam?.replace(/^post_/, "") || postFromQuery || "").trim();
                 const useDevMock = import.meta.env.VITE_DEV_MAX_AUTH === "true";
                 let auth;
                 if (useDevMock) {
@@ -108,20 +117,33 @@ export function CommentsPage() {
                     setSelfDisplayHint(hintFromInitDataUnsafeUser());
                 }
                 setUserId(auth.userId);
+                setReportDeepLink(null);
+                let resolvedRole = "user";
                 try {
                     const meRole = await getMeRole(auth.userId);
+                    resolvedRole = meRole.role;
                     setRole(meRole.role);
                 }
                 catch {
                     setRole("user");
                 }
-                const postIdFromAuth = auth.startParam?.replace(/^post_/, "").trim() ?? "";
-                const finalPostId = resolvedPostId || postIdFromAuth;
-                setPostId(finalPostId);
-                if (finalPostId) {
-                    const post = await getPost(finalPostId, auth.userId);
+                if (reportIdFromDeepLink) {
+                    const ctx = await getModerationReportContext(reportIdFromDeepLink, auth.userId);
+                    setReportDeepLink({ reportId: reportIdFromDeepLink, context: ctx });
+                    setPostId(ctx.postId);
+                    const post = await getPost(ctx.postId, auth.userId);
                     setRestriction(post.restriction);
-                    await reloadComments(finalPostId);
+                    await reloadComments(ctx.postId, resolvedRole === "moderator");
+                }
+                else {
+                    const postIdFromAuth = auth.startParam?.replace(/^post_/, "").trim() ?? "";
+                    const finalPostId = resolvedPostId || postIdFromAuth;
+                    setPostId(finalPostId);
+                    if (finalPostId) {
+                        const post = await getPost(finalPostId, auth.userId);
+                        setRestriction(post.restriction);
+                        await reloadComments(finalPostId);
+                    }
                 }
             }
             catch (error) {
@@ -140,7 +162,33 @@ export function CommentsPage() {
     if (bootstrapError) {
         return (_jsxs("main", { className: "comments-app", style: { padding: 16, justifyContent: "center" }, children: [_jsx("h1", { style: { fontSize: "1.1rem" }, children: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043E\u0431\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0435" }), _jsx("p", { style: { color: "#9b9ba3" }, children: bootstrapError }), _jsx("button", { type: "button", onClick: () => setBootstrapAttempt((n) => n + 1), children: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C" })] }));
     }
-    return (_jsxs("div", { className: "comments-app", children: [_jsxs("header", { className: "comments-app__header", children: [_jsx("h1", { children: "\u041E\u0431\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0435" }), _jsx(RestrictionBanner, { restriction: restriction })] }), postId ? (_jsx(CommentList, { comments: comments, currentUserId: userId, selfDisplayHint: selfDisplayHint, postId: postId, onReply: (c) => {
+    async function handleResolveKeepFromReport() {
+        if (!reportDeepLink)
+            return;
+        await resolveModerationReportKeep(reportDeepLink.reportId, userId);
+        await refreshReportContext(reportDeepLink.reportId, userId);
+        await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));
+    }
+    const reportBanner = reportDeepLink
+        ? {
+            handled: reportDeepLink.context.reportStatus !== "open",
+            deleted: reportDeepLink.context.commentStatus === "deleted",
+            noRights: !reportDeepLink.context.canModerate
+        }
+        : null;
+    return (_jsxs("div", { className: "comments-app", children: [_jsxs("header", { className: "comments-app__header", children: [_jsx("h1", { children: "\u041E\u0431\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0435" }), reportBanner ? (_jsxs("div", { className: "report-dl-banner", role: "status", children: [reportBanner.handled ? _jsx("p", { className: "report-dl-banner__line", children: "\u0416\u0430\u043B\u043E\u0431\u0430 \u0443\u0436\u0435 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D\u0430." }) : null, reportBanner.deleted ? _jsx("p", { className: "report-dl-banner__line", children: "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439 \u0443\u0434\u0430\u043B\u0451\u043D." }) : null, reportBanner.noRights ? (_jsx("p", { className: "report-dl-banner__line", children: "\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u043F\u0440\u0430\u0432 \u0434\u043B\u044F \u043C\u043E\u0434\u0435\u0440\u0430\u0446\u0438\u0438 \u044D\u0442\u043E\u0433\u043E \u0430\u0432\u0442\u043E\u0440\u0430." })) : null, reportDeepLink &&
+                                reportDeepLink.context.canModerate &&
+                                reportDeepLink.context.reportsOpenCount > 0 ? (_jsx("button", { type: "button", className: "report-dl-banner__action", onClick: () => void handleResolveKeepFromReport(), children: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0436\u0430\u043B\u043E\u0431\u0443 \u0431\u0435\u0437 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F" })) : null] })) : null, _jsx(RestrictionBanner, { restriction: restriction })] }), postId ? (_jsx(CommentList, { comments: comments, currentUserId: userId, selfDisplayHint: selfDisplayHint, postId: postId, highlightCommentId: reportDeepLink?.context.commentId, reportBadge: reportDeepLink && reportDeepLink.context.commentStatus !== "deleted"
+                    ? {
+                        commentId: reportDeepLink.context.commentId,
+                        openCount: reportDeepLink.context.reportsOpenCount,
+                        linkedReportClosed: reportDeepLink.context.reportStatus !== "open"
+                    }
+                    : undefined, reportModMenu: reportDeepLink &&
+                    reportDeepLink.context.canModerate &&
+                    reportDeepLink.context.reportsOpenCount > 0
+                    ? { anchorCommentId: reportDeepLink.context.commentId, onResolveKeep: handleResolveKeepFromReport }
+                    : undefined, onReply: (c) => {
                     setReplyToMessage(c);
                     setEditingMessage(null);
                 }, onEdit: (c) => {
@@ -148,12 +196,15 @@ export function CommentsPage() {
                     setReplyToMessage(null);
                 }, onDelete: async (commentId) => {
                     await deleteOwnComment(commentId, userId);
-                    await reloadComments(postId);
+                    await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));
                 }, canModerate: role === "moderator", onModerateDelete: async (commentId) => {
                     if (!window.confirm("Delete comment as moderator?"))
                         return;
                     await moderateCommentByModerator(userId, commentId, "delete");
-                    await reloadComments(postId);
+                    if (reportDeepLink) {
+                        await refreshReportContext(reportDeepLink.reportId, userId);
+                    }
+                    await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));
                 }, onMuteUser: async (targetUserId) => {
                     if (!window.confirm("Mute this user?"))
                         return;
@@ -188,6 +239,6 @@ export function CommentsPage() {
                         await createComment(postId, userId, text, attachmentIds);
                         setReplyToMessage(null);
                     }
-                    await reloadComments(postId);
+                    await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));
                 } }))] }));
 }

@@ -9,12 +9,16 @@ import {
   getMeRole,
   getComments,
   getPost,
+  getModerationReportContext,
   moderateCommentByModerator,
   muteUserByModerator,
+  resolveModerationReportKeep,
   unblockUserByModerator,
   updateOwnComment,
   uploadCommentImage
 } from "../../lib/api-client";
+import type { ModerationReportContext } from "../../lib/api-client";
+import { parseReportIdFromStartParam } from "../../lib/report-deeplink";
 import { getInitDataUnsafeUser, getStartParam, waitForInitData } from "../../lib/max-webapp";
 import { CommentList } from "./comment-list";
 import type { CommentItemModel } from "./comment-item";
@@ -44,6 +48,10 @@ export function CommentsPage() {
   const [selfDisplayHint, setSelfDisplayHint] = useState<string | null>(null);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [role, setRole] = useState<"user" | "moderator">("user");
+  const [reportDeepLink, setReportDeepLink] = useState<{
+    reportId: string;
+    context: ModerationReportContext;
+  } | null>(null);
 
   function toBootstrapErrorMessage(error: unknown): string {
     if (!(error instanceof Error)) return "Ошибка загрузки данных";
@@ -60,8 +68,13 @@ export function CommentsPage() {
     return error.message || "Ошибка загрузки данных";
   }
 
-  async function reloadComments(currentPostId: string) {
-    const response = await getComments(currentPostId);
+  async function refreshReportContext(reportId: string, uid: string) {
+    const ctx = await getModerationReportContext(reportId, uid);
+    setReportDeepLink({ reportId, context: ctx });
+  }
+
+  async function reloadComments(currentPostId: string, includeHidden?: boolean) {
+    const response = await getComments(currentPostId, includeHidden ? { includeHidden: true } : undefined);
     const mapped: CommentItemModel[] = response.items.map((c: Record<string, unknown>) => ({
       id: c.id as string,
       text: c.text as string,
@@ -101,7 +114,10 @@ export function CommentsPage() {
         const startParam = getStartParam();
         const query = new URLSearchParams(window.location.search);
         const postFromQuery = query.get("postId") ?? import.meta.env.VITE_DEV_POST_ID ?? "";
-        const resolvedPostId = (startParam?.replace(/^post_/, "") || postFromQuery || "").trim();
+        const reportIdFromDeepLink = parseReportIdFromStartParam(startParam);
+        const resolvedPostId = reportIdFromDeepLink
+          ? ""
+          : (startParam?.replace(/^post_/, "") || postFromQuery || "").trim();
 
         const useDevMock = import.meta.env.VITE_DEV_MAX_AUTH === "true";
         let auth: Awaited<ReturnType<typeof authByInitData>>;
@@ -125,20 +141,33 @@ export function CommentsPage() {
         }
 
         setUserId(auth.userId);
+        setReportDeepLink(null);
+        let resolvedRole: "user" | "moderator" = "user";
         try {
           const meRole = await getMeRole(auth.userId);
+          resolvedRole = meRole.role;
           setRole(meRole.role);
         } catch {
           setRole("user");
         }
-        const postIdFromAuth = auth.startParam?.replace(/^post_/, "").trim() ?? "";
-        const finalPostId = resolvedPostId || postIdFromAuth;
-        setPostId(finalPostId);
 
-        if (finalPostId) {
-          const post = await getPost(finalPostId, auth.userId);
+        if (reportIdFromDeepLink) {
+          const ctx = await getModerationReportContext(reportIdFromDeepLink, auth.userId);
+          setReportDeepLink({ reportId: reportIdFromDeepLink, context: ctx });
+          setPostId(ctx.postId);
+          const post = await getPost(ctx.postId, auth.userId);
           setRestriction(post.restriction);
-          await reloadComments(finalPostId);
+          await reloadComments(ctx.postId, resolvedRole === "moderator");
+        } else {
+          const postIdFromAuth = auth.startParam?.replace(/^post_/, "").trim() ?? "";
+          const finalPostId = resolvedPostId || postIdFromAuth;
+          setPostId(finalPostId);
+
+          if (finalPostId) {
+            const post = await getPost(finalPostId, auth.userId);
+            setRestriction(post.restriction);
+            await reloadComments(finalPostId);
+          }
         }
       } catch (error) {
         setBootstrapError(toBootstrapErrorMessage(error));
@@ -171,10 +200,41 @@ export function CommentsPage() {
     );
   }
 
+  async function handleResolveKeepFromReport() {
+    if (!reportDeepLink) return;
+    await resolveModerationReportKeep(reportDeepLink.reportId, userId);
+    await refreshReportContext(reportDeepLink.reportId, userId);
+    await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));
+  }
+
+  const reportBanner = reportDeepLink
+    ? {
+        handled: reportDeepLink.context.reportStatus !== "open",
+        deleted: reportDeepLink.context.commentStatus === "deleted",
+        noRights: !reportDeepLink.context.canModerate
+      }
+    : null;
+
   return (
     <div className="comments-app">
       <header className="comments-app__header">
         <h1>Обсуждение</h1>
+        {reportBanner ? (
+          <div className="report-dl-banner" role="status">
+            {reportBanner.handled ? <p className="report-dl-banner__line">Жалоба уже обработана.</p> : null}
+            {reportBanner.deleted ? <p className="report-dl-banner__line">Комментарий удалён.</p> : null}
+            {reportBanner.noRights ? (
+              <p className="report-dl-banner__line">Недостаточно прав для модерации этого автора.</p>
+            ) : null}
+            {reportDeepLink &&
+            reportDeepLink.context.canModerate &&
+            reportDeepLink.context.reportsOpenCount > 0 ? (
+              <button type="button" className="report-dl-banner__action" onClick={() => void handleResolveKeepFromReport()}>
+                Закрыть жалобу без удаления
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <RestrictionBanner restriction={restriction} />
       </header>
       {postId ? (
@@ -183,6 +243,23 @@ export function CommentsPage() {
           currentUserId={userId}
           selfDisplayHint={selfDisplayHint}
           postId={postId}
+          highlightCommentId={reportDeepLink?.context.commentId}
+          reportBadge={
+            reportDeepLink && reportDeepLink.context.commentStatus !== "deleted"
+              ? {
+                  commentId: reportDeepLink.context.commentId,
+                  openCount: reportDeepLink.context.reportsOpenCount,
+                  linkedReportClosed: reportDeepLink.context.reportStatus !== "open"
+                }
+              : undefined
+          }
+          reportModMenu={
+            reportDeepLink &&
+            reportDeepLink.context.canModerate &&
+            reportDeepLink.context.reportsOpenCount > 0
+              ? { anchorCommentId: reportDeepLink.context.commentId, onResolveKeep: handleResolveKeepFromReport }
+              : undefined
+          }
           onReply={(c) => {
             setReplyToMessage(c);
             setEditingMessage(null);
@@ -193,13 +270,16 @@ export function CommentsPage() {
           }}
           onDelete={async (commentId) => {
             await deleteOwnComment(commentId, userId);
-            await reloadComments(postId);
+            await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));
           }}
           canModerate={role === "moderator"}
           onModerateDelete={async (commentId) => {
             if (!window.confirm("Delete comment as moderator?")) return;
             await moderateCommentByModerator(userId, commentId, "delete");
-            await reloadComments(postId);
+            if (reportDeepLink) {
+              await refreshReportContext(reportDeepLink.reportId, userId);
+            }
+            await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));
           }}
           onMuteUser={async (targetUserId) => {
             if (!window.confirm("Mute this user?")) return;
@@ -249,7 +329,7 @@ export function CommentsPage() {
               await createComment(postId, userId, text, attachmentIds);
               setReplyToMessage(null);
             }
-            await reloadComments(postId);
+            await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));
           }}
         />
       )}

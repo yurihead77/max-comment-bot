@@ -45,9 +45,62 @@ export async function getPost(postId: string, userId: string) {
   return response.json();
 }
 
-export async function getComments(postId: string) {
-  const response = await fetch(`${API_BASE}/posts/${postId}/comments`);
+export async function getComments(postId: string, opts?: { includeHidden?: boolean }) {
+  const q = opts?.includeHidden ? "?includeHidden=true" : "";
+  const response = await fetch(`${API_BASE}/posts/${postId}/comments${q}`);
   return response.json();
+}
+
+export type ModerationReportContext = {
+  reportId: string;
+  reportStatus: "open" | "dismissed" | "resolved_keep" | "resolved_delete";
+  postId: string;
+  commentId: string;
+  channelId: string;
+  channelMaxChatId: string;
+  reportsOpenCount: number;
+  commentText: string;
+  commentStatus: "active" | "hidden" | "deleted";
+  commentAuthor: {
+    userId: string;
+    displayName: string;
+    maxUserId: string;
+    username: string | null;
+    firstName: string | null;
+    lastName: string | null;
+  };
+  post: {
+    id: string;
+    maxMessageId: string;
+    botMessageText: string | null;
+    commentsCount: number;
+    status: string;
+    chat: { id: string; title: string | null; maxChatId: string; type: string };
+  };
+  canModerate: boolean;
+};
+
+export async function getModerationReportContext(reportId: string, userId: string) {
+  const response = await fetch(`${API_BASE}/moderation/reports/${encodeURIComponent(reportId)}/context`, {
+    headers: { "x-user-id": userId }
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`report context failed: ${response.status} ${errText}`);
+  }
+  return response.json() as Promise<ModerationReportContext>;
+}
+
+export async function resolveModerationReportKeep(reportId: string, userId: string) {
+  const response = await fetch(`${API_BASE}/moderation/reports/${encodeURIComponent(reportId)}/resolve-keep`, {
+    method: "POST",
+    headers: { "x-user-id": userId }
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`resolve keep failed: ${response.status} ${errText}`);
+  }
+  return response.json() as Promise<{ ok: boolean; closedReports: number }>;
 }
 
 export async function createComment(postId: string, userId: string, text: string, attachmentIds: string[] = []) {
@@ -92,7 +145,7 @@ export async function reportComment(commentId: string, userId: string, reason?: 
   if (!response.ok) {
     throw new Error("failed to report comment");
   }
-  return response.json() as Promise<{ ok: boolean; duplicate?: boolean; openReportsCount: number }>;
+  return response.json() as Promise<{ ok: boolean; duplicate?: boolean; openReportsCount: number; reportId: string }>;
 }
 
 export async function deleteOwnComment(commentId: string, userId: string) {

@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { syncPostCommentsCount } from "../../comments/comments.service";
 import { ensureModeratorOrAdmin, getActor } from "../admin-authz";
+import { resolveOpenReportsForComment } from "../moderation/comment-reports.service";
 import { ensureCanModerateTargetUser } from "../moderation/moderation-policy";
 
 const patchSchema = z.object({
@@ -201,6 +202,9 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
       }
     });
 
+    if (parsed.data.action === "delete") {
+      await resolveOpenReportsForComment(app.prisma, commentId, "resolved_delete");
+    }
     await syncPostCommentsCount(app, existing.postId);
     return updated;
   });
@@ -240,6 +244,9 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
         performedByType: actor.actorType
       }
     });
+    if (action === "delete") {
+      await resolveOpenReportsForComment(app.prisma, commentId, "resolved_delete");
+    }
     await syncPostCommentsCount(app, existing.postId);
     return updated;
   });
