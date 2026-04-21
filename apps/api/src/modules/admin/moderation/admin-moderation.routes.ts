@@ -1,9 +1,9 @@
 import type { FastifyPluginAsync } from "fastify";
-import { ensureRole } from "../admin-authz";
+import { ensureModeratorOrAdmin } from "../admin-authz";
 
 export const adminModerationRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", async (request, reply) => {
-    if (!ensureRole(request, reply, ["admin", "moderator"])) {
+    if (!ensureModeratorOrAdmin(request, reply)) {
       return;
     }
   });

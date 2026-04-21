@@ -3,7 +3,7 @@ import { assignModerator, getModerators, revokeModerator } from "../../lib/admin
 
 export function ModeratorsPage() {
   const [items, setItems] = useState<any[]>([]);
-  const [userId, setUserId] = useState("");
+  const [platformUserId, setPlatformUserId] = useState("");
 
   async function load() {
     const data = await getModerators();
@@ -20,22 +20,29 @@ export function ModeratorsPage() {
       <form
         onSubmit={async (event) => {
           event.preventDefault();
-          await assignModerator(userId.trim());
-          setUserId("");
+          await assignModerator(platformUserId.trim());
+          setPlatformUserId("");
           await load();
         }}
       >
-        <input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="Admin User ID" />
+        <input
+          value={platformUserId}
+          onChange={(e) => setPlatformUserId(e.target.value)}
+          placeholder="Platform User ID (max_user_id)"
+        />
         <button type="submit">Assign moderator</button>
       </form>
       <ul>
         {items.map((item) => (
-          <li key={item.id}>
-            {item.email} ({item.id})
+          <li key={item.userId}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {item.avatarUrl ? <img src={item.avatarUrl} alt="" width={20} height={20} style={{ borderRadius: "50%" }} /> : null}
+              {item.displayName || "Unknown"} ({item.platformUserId})
+            </span>
             <button
               onClick={async () => {
                 if (!window.confirm("Remove moderator role?")) return;
-                await revokeModerator(item.id);
+                await revokeModerator(item.platformUserId);
                 await load();
               }}
             >

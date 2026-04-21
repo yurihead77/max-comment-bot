@@ -4,7 +4,7 @@ import { CommentContextMenu } from "./comment-context-menu";
 import { CommentItem } from "./comment-item";
 import { COMMENT_EMPTY_SUBTITLE, COMMENT_EMPTY_TITLE } from "./comment-ui-strings";
 import { MessageList } from "./message-list";
-export function CommentList({ comments, currentUserId, selfDisplayHint, postId, onEdit, onDelete, onReply }) {
+export function CommentList({ comments, currentUserId, selfDisplayHint, postId, onEdit, onDelete, onReply, canModerate, onModerateDelete, onMuteUser, onBlockUser, onUnblockUser }) {
     const scrollRef = useRef(null);
     const [menu, setMenu] = useState(null);
     const [reactions, setReactions] = useState({});
@@ -52,5 +52,5 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
                 }, onEdit: (c) => {
                     onEdit(c);
                     setMenu(null);
-                }, onDelete: (id) => void onDelete(id) })] }));
+                }, onDelete: (id) => void onDelete(id), canModerate: canModerate, onModerateDelete: (id) => void onModerateDelete(id), onMuteUser: (id) => void onMuteUser(id), onBlockUser: (id) => void onBlockUser(id), onUnblockUser: (id) => void onUnblockUser(id) })] }));
 }

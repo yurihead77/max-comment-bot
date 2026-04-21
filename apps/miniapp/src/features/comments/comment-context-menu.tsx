@@ -63,6 +63,11 @@ export interface CommentContextMenuProps {
   onReply: (comment: CommentItemModel) => void;
   onEdit: (comment: CommentItemModel) => void;
   onDelete: (commentId: string) => void | Promise<void>;
+  canModerate: boolean;
+  onModerateDelete: (commentId: string) => void | Promise<void>;
+  onMuteUser: (targetUserId: string) => void | Promise<void>;
+  onBlockUser: (targetUserId: string) => void | Promise<void>;
+  onUnblockUser: (targetUserId: string) => void | Promise<void>;
 }
 
 export function CommentContextMenu({
@@ -76,7 +81,12 @@ export function CommentContextMenu({
   onClose,
   onReply,
   onEdit,
-  onDelete
+  onDelete,
+  canModerate,
+  onModerateDelete,
+  onMuteUser,
+  onBlockUser,
+  onUnblockUser
 }: CommentContextMenuProps) {
   const open = Boolean(comment && anchor);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -267,6 +277,70 @@ export function CommentContextMenu({
                   🗑
                 </span>
                 <span>{COMMENT_CTX_DELETE}</span>
+              </button>
+            </>
+          ) : null}
+          {!own && canModerate ? (
+            <>
+              <button
+                type="button"
+                className="ctx-row ctx-row--danger"
+                onClick={() => {
+                  void (async () => {
+                    await Promise.resolve(onModerateDelete(comment.id));
+                    onClose();
+                  })();
+                }}
+              >
+                <span className="ctx-row__icon" aria-hidden>
+                  🛑
+                </span>
+                <span>Delete (moderator)</span>
+              </button>
+              <button
+                type="button"
+                className="ctx-row"
+                onClick={() => {
+                  void (async () => {
+                    await Promise.resolve(onMuteUser(comment.authorId));
+                    onClose();
+                  })();
+                }}
+              >
+                <span className="ctx-row__icon" aria-hidden>
+                  🔇
+                </span>
+                <span>Mute user</span>
+              </button>
+              <button
+                type="button"
+                className="ctx-row"
+                onClick={() => {
+                  void (async () => {
+                    await Promise.resolve(onBlockUser(comment.authorId));
+                    onClose();
+                  })();
+                }}
+              >
+                <span className="ctx-row__icon" aria-hidden>
+                  ⛔
+                </span>
+                <span>Block user</span>
+              </button>
+              <button
+                type="button"
+                className="ctx-row"
+                onClick={() => {
+                  void (async () => {
+                    await Promise.resolve(onUnblockUser(comment.authorId));
+                    onClose();
+                  })();
+                }}
+              >
+                <span className="ctx-row__icon" aria-hidden>
+                  ✅
+                </span>
+                <span>Unblock user</span>
               </button>
             </>
           ) : null}

@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { syncPostCommentsCount } from "../../comments/comments.service";
-import { ensureRole } from "../admin-authz";
+import { ensureModeratorOrAdmin, getActor } from "../admin-authz";
 
 const patchSchema = z.object({
   action: z.enum(["hide", "unhide", "delete", "restore"]),
@@ -10,7 +10,7 @@ const patchSchema = z.object({
 
 export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", async (request, reply) => {
-    if (!ensureRole(request, reply, ["admin", "moderator"])) {
+    if (!ensureModeratorOrAdmin(request, reply)) {
       return;
     }
   });
@@ -158,16 +158,58 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
       }
     });
 
+    const actor = getActor(request);
     await app.prisma.moderationAction.create({
       data: {
         actionType: `comment_${parsed.data.action}`,
+        targetType: "comment",
+        targetId: commentId,
         targetCommentId: commentId,
         targetPostId: existing.postId,
-        performedByUserId: request.adminSession!.adminUserId,
-        reason: parsed.data.reason ?? null
+        performedByUserId: actor.actorId,
+        performedByType: actor.actorType,
+        reason: parsed.data.reason ?? null,
+        metadataJson: {
+          postId: existing.postId
+        }
       }
     });
 
+    await syncPostCommentsCount(app, existing.postId);
+    return updated;
+  });
+
+  app.post("/api/moderation/comments/:commentId/:action", async (request, reply) => {
+    if (!ensureModeratorOrAdmin(request, reply)) {
+      return;
+    }
+    const { commentId, action } = request.params as { commentId: string; action: "hide" | "delete" | "restore" };
+    const existing = await app.prisma.comment.findUnique({ where: { id: commentId } });
+    if (!existing) {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const now = new Date();
+    const nextStatus = action === "hide" ? "hidden" : action === "delete" ? "deleted" : "active";
+    const updated = await app.prisma.comment.update({
+      where: { id: commentId },
+      data: {
+        status: nextStatus,
+        hiddenAt: nextStatus === "hidden" ? now : null,
+        deletedAt: nextStatus === "deleted" ? now : null
+      }
+    });
+    const actor = getActor(request);
+    await app.prisma.moderationAction.create({
+      data: {
+        actionType: `comment_${action}`,
+        targetType: "comment",
+        targetId: commentId,
+        targetCommentId: commentId,
+        targetPostId: existing.postId,
+        performedByUserId: actor.actorId,
+        performedByType: actor.actorType
+      }
+    });
     await syncPostCommentsCount(app, existing.postId);
     return updated;
   });

@@ -13,9 +13,11 @@ import { adminRestrictionsRoutes } from "./modules/admin/restrictions/admin-rest
 import { maxAuthRoutes } from "./modules/auth/max-auth.routes";
 import { commentsRoutes } from "./modules/comments/comments.routes";
 import { internalPostsRoutes } from "./modules/internal/internal-posts.routes";
+import { meRoutes } from "./modules/me/me.routes";
 import { postsRoutes } from "./modules/posts/posts.routes";
 import { uploadsRoutes } from "./modules/uploads/uploads.routes";
 import { prismaPlugin } from "./plugins/prisma";
+import { platformUserPlugin } from "./plugins/platform-user";
 import { sessionPlugin } from "./plugins/session";
 
 export async function createApp() {
@@ -54,8 +56,10 @@ export async function createApp() {
   });
 
   await app.register(sessionPlugin);
+  await app.register(platformUserPlugin);
 
   await app.register(maxAuthRoutes);
+  await app.register(meRoutes);
   await app.register(postsRoutes);
   await app.register(commentsRoutes);
   await app.register(uploadsRoutes);

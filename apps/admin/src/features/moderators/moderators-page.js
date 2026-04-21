@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { assignModerator, getModerators, revokeModerator } from "../../lib/admin-api";
 export function ModeratorsPage() {
     const [items, setItems] = useState([]);
-    const [userId, setUserId] = useState("");
+    const [platformUserId, setPlatformUserId] = useState("");
     async function load() {
         const data = await getModerators();
         setItems(data.items ?? []);
@@ -13,13 +13,13 @@ export function ModeratorsPage() {
     }, []);
     return (_jsxs("section", { style: { display: "grid", gap: 8 }, children: [_jsx("h2", { children: "Moderators" }), _jsxs("form", { onSubmit: async (event) => {
                     event.preventDefault();
-                    await assignModerator(userId.trim());
-                    setUserId("");
+                    await assignModerator(platformUserId.trim());
+                    setPlatformUserId("");
                     await load();
-                }, children: [_jsx("input", { value: userId, onChange: (e) => setUserId(e.target.value), placeholder: "Admin User ID" }), _jsx("button", { type: "submit", children: "Assign moderator" })] }), _jsx("ul", { children: items.map((item) => (_jsxs("li", { children: [item.email, " (", item.id, ")", _jsx("button", { onClick: async () => {
+                }, children: [_jsx("input", { value: platformUserId, onChange: (e) => setPlatformUserId(e.target.value), placeholder: "Platform User ID (max_user_id)" }), _jsx("button", { type: "submit", children: "Assign moderator" })] }), _jsx("ul", { children: items.map((item) => (_jsxs("li", { children: [_jsxs("span", { style: { display: "inline-flex", alignItems: "center", gap: 6 }, children: [item.avatarUrl ? _jsx("img", { src: item.avatarUrl, alt: "", width: 20, height: 20, style: { borderRadius: "50%" } }) : null, item.displayName || "Unknown", " (", item.platformUserId, ")"] }), _jsx("button", { onClick: async () => {
                                 if (!window.confirm("Remove moderator role?"))
                                     return;
-                                await revokeModerator(item.id);
+                                await revokeModerator(item.platformUserId);
                                 await load();
-                            }, children: "Remove" })] }, item.id))) })] }));
+                            }, children: "Remove" })] }, item.userId))) })] }));
 }

@@ -32,7 +32,7 @@ function estimateMenuHeight(own) {
     const padding = 12;
     return reactionBar + rows * row + padding;
 }
-export function CommentContextMenu({ comment, anchor, currentUserId, postId, reactionCounts, userReaction, onToggleReaction, onClose, onReply, onEdit, onDelete }) {
+export function CommentContextMenu({ comment, anchor, currentUserId, postId, reactionCounts, userReaction, onToggleReaction, onClose, onReply, onEdit, onDelete, canModerate, onModerateDelete, onMuteUser, onBlockUser, onUnblockUser }) {
     const open = Boolean(comment && anchor);
     const popoverRef = useRef(null);
     const [popoverStyle, setPopoverStyle] = useState(undefined);
@@ -140,5 +140,25 @@ export function CommentContextMenu({ comment, anchor, currentUserId, postId, rea
                                                 await Promise.resolve(onDelete(comment.id));
                                                 onClose();
                                             })();
-                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\uD83D\uDDD1" }), _jsx("span", { children: COMMENT_CTX_DELETE })] })] })) : null] })] })] }));
+                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\uD83D\uDDD1" }), _jsx("span", { children: COMMENT_CTX_DELETE })] })] })) : null, !own && canModerate ? (_jsxs(_Fragment, { children: [_jsxs("button", { type: "button", className: "ctx-row ctx-row--danger", onClick: () => {
+                                            void (async () => {
+                                                await Promise.resolve(onModerateDelete(comment.id));
+                                                onClose();
+                                            })();
+                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\uD83D\uDED1" }), _jsx("span", { children: "Delete (moderator)" })] }), _jsxs("button", { type: "button", className: "ctx-row", onClick: () => {
+                                            void (async () => {
+                                                await Promise.resolve(onMuteUser(comment.authorId));
+                                                onClose();
+                                            })();
+                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\uD83D\uDD07" }), _jsx("span", { children: "Mute user" })] }), _jsxs("button", { type: "button", className: "ctx-row", onClick: () => {
+                                            void (async () => {
+                                                await Promise.resolve(onBlockUser(comment.authorId));
+                                                onClose();
+                                            })();
+                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\u26D4" }), _jsx("span", { children: "Block user" })] }), _jsxs("button", { type: "button", className: "ctx-row", onClick: () => {
+                                            void (async () => {
+                                                await Promise.resolve(onUnblockUser(comment.authorId));
+                                                onClose();
+                                            })();
+                                        }, children: [_jsx("span", { className: "ctx-row__icon", "aria-hidden": true, children: "\u2705" }), _jsx("span", { children: "Unblock user" })] })] })) : null] })] })] }));
 }

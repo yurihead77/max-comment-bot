@@ -12,6 +12,11 @@ interface CommentListProps {
   onEdit: (comment: CommentItemModel) => void;
   onDelete: (commentId: string) => void | Promise<void>;
   onReply: (comment: CommentItemModel) => void;
+  canModerate: boolean;
+  onModerateDelete: (commentId: string) => void | Promise<void>;
+  onMuteUser: (targetUserId: string) => void | Promise<void>;
+  onBlockUser: (targetUserId: string) => void | Promise<void>;
+  onUnblockUser: (targetUserId: string) => void | Promise<void>;
 }
 
 export function CommentList({
@@ -21,7 +26,12 @@ export function CommentList({
   postId,
   onEdit,
   onDelete,
-  onReply
+  onReply,
+  canModerate,
+  onModerateDelete,
+  onMuteUser,
+  onBlockUser,
+  onUnblockUser
 }: CommentListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ comment: CommentItemModel; x: number; y: number } | null>(null);
@@ -114,6 +124,11 @@ export function CommentList({
           setMenu(null);
         }}
         onDelete={(id) => void onDelete(id)}
+        canModerate={canModerate}
+        onModerateDelete={(id) => void onModerateDelete(id)}
+        onMuteUser={(id) => void onMuteUser(id)}
+        onBlockUser={(id) => void onBlockUser(id)}
+        onUnblockUser={(id) => void onUnblockUser(id)}
       />
     </>
   );

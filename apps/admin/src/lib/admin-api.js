@@ -88,19 +88,19 @@ export async function getModerators() {
     });
     return response.json();
 }
-export async function assignModerator(userId) {
+export async function assignModerator(platformUserId) {
     const response = await fetch(`${API_BASE}/admin/moderators`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId })
+        body: JSON.stringify({ platformUserId })
     });
     if (!response.ok) {
         throw new Error("failed to assign moderator");
     }
 }
-export async function revokeModerator(userId) {
-    const response = await fetch(`${API_BASE}/admin/moderators/${userId}`, {
+export async function revokeModerator(platformUserId) {
+    const response = await fetch(`${API_BASE}/admin/moderators/${platformUserId}`, {
         method: "DELETE",
         credentials: "include"
     });

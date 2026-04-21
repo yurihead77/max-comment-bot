@@ -102,3 +102,58 @@ export async function uploadCommentImage(file: File) {
   }
   return response.json();
 }
+
+export async function getMeRole(userId: string) {
+  const response = await fetch(`${API_BASE}/api/me/role`, {
+    headers: { "x-user-id": userId }
+  });
+  if (!response.ok) {
+    throw new Error("failed to get role");
+  }
+  return response.json() as Promise<{ role: "user" | "moderator" }>;
+}
+
+export async function moderateCommentByModerator(
+  userId: string,
+  commentId: string,
+  action: "hide" | "delete" | "restore"
+) {
+  const response = await fetch(`${API_BASE}/api/moderation/comments/${commentId}/${action}`, {
+    method: "POST",
+    headers: { "x-user-id": userId }
+  });
+  if (!response.ok) {
+    throw new Error("failed to moderate comment");
+  }
+  return response.json();
+}
+
+export async function muteUserByModerator(userId: string, targetUserId: string) {
+  const response = await fetch(`${API_BASE}/api/moderation/users/${targetUserId}/mute`, {
+    method: "POST",
+    headers: { "x-user-id": userId }
+  });
+  if (!response.ok) {
+    throw new Error("failed to mute user");
+  }
+}
+
+export async function blockUserByModerator(userId: string, targetUserId: string) {
+  const response = await fetch(`${API_BASE}/api/moderation/users/${targetUserId}/block`, {
+    method: "POST",
+    headers: { "x-user-id": userId }
+  });
+  if (!response.ok) {
+    throw new Error("failed to block user");
+  }
+}
+
+export async function unblockUserByModerator(userId: string, targetUserId: string) {
+  const response = await fetch(`${API_BASE}/api/moderation/users/${targetUserId}/unblock`, {
+    method: "POST",
+    headers: { "x-user-id": userId }
+  });
+  if (!response.ok) {
+    throw new Error("failed to unblock user");
+  }
+}

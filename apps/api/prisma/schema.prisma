@@ -40,8 +40,20 @@ model User {
 
   comments     Comment[]
   restrictions UserRestriction[]
+  moderator    Moderator?
 
   @@map("users")
+}
+
+model Moderator {
+  id           String   @id @default(cuid())
+  userId       String   @unique @map("user_id")
+  assignedBy   String   @map("assigned_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("moderators")
 }
 
 model Chat {
@@ -153,11 +165,15 @@ model UserRestriction {
 model ModerationAction {
   id                String   @id @default(cuid())
   actionType        String   @map("action_type")
+  targetType        String?  @map("target_type")
+  targetId          String?  @map("target_id")
   targetUserId      String?  @map("target_user_id")
   targetCommentId   String?  @map("target_comment_id")
   targetPostId      String?  @map("target_post_id")
   performedByUserId String   @map("performed_by_user_id")
+  performedByType   String?  @map("performed_by_type")
   reason            String?
+  metadataJson      Json?    @map("metadata_json")
   payloadJson       Json?    @map("payload_json")
   createdAt         DateTime @default(now()) @map("created_at")
 

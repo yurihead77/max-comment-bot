@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ensureRole } from "../admin-authz";
 
 const assignSchema = z.object({
-  userId: z.string().min(1)
+  platformUserId: z.string().min(1)
 });
 
 export const adminModeratorsRoutes: FastifyPluginAsync = async (app) => {
@@ -14,12 +14,31 @@ export const adminModeratorsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/api/admin/moderators", async () => {
-    const items = await app.prisma.adminUser.findMany({
-      where: { role: "moderator", isActive: true },
-      select: { id: true, email: true, role: true, createdAt: true, updatedAt: true },
+    const items = await app.prisma.moderator.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            maxUserId: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            photoUrl: true
+          }
+        }
+      },
       orderBy: { createdAt: "desc" }
     });
-    return { items };
+    return {
+      items: items.map((item) => ({
+        userId: item.userId,
+        platformUserId: item.user.maxUserId,
+        displayName: [item.user.firstName, item.user.lastName].filter(Boolean).join(" ") || item.user.username || null,
+        avatarUrl: item.user.photoUrl,
+        createdAt: item.createdAt,
+        assignedBy: item.assignedBy
+      }))
+    };
   });
 
   app.post("/api/admin/moderators", async (request, reply) => {
@@ -28,39 +47,76 @@ export const adminModeratorsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "invalid body" });
     }
 
-    const updated = await app.prisma.adminUser.update({
-      where: { id: parsed.data.userId },
-      data: { role: "moderator" },
-      select: { id: true, email: true, role: true, createdAt: true, updatedAt: true }
+    const user = await app.prisma.user.findUnique({
+      where: { maxUserId: parsed.data.platformUserId }
+    });
+    if (!user) {
+      return reply.code(404).send({ error: "platform user not found" });
+    }
+
+    const moderator = await app.prisma.moderator.upsert({
+      where: { userId: user.id },
+      update: {},
+      create: {
+        userId: user.id,
+        assignedBy: request.adminSession!.adminUserId
+      }
     });
 
     await app.prisma.moderationAction.create({
       data: {
         actionType: "assign_moderator",
-        targetUserId: updated.id,
-        performedByUserId: request.adminSession!.adminUserId
+        targetType: "moderator",
+        targetId: moderator.id,
+        targetUserId: user.id,
+        performedByUserId: request.adminSession!.adminUserId,
+        performedByType: "admin",
+        metadataJson: {
+          platformUserId: user.maxUserId
+        }
       }
     });
 
-    return reply.code(201).send(updated);
+    return reply.code(201).send({
+      userId: user.id,
+      platformUserId: user.maxUserId,
+      assignedBy: moderator.assignedBy,
+      createdAt: moderator.createdAt
+    });
   });
 
-  app.delete("/api/admin/moderators/:userId", async (request, reply) => {
-    const { userId } = request.params as { userId: string };
-    const updated = await app.prisma.adminUser.update({
-      where: { id: userId },
-      data: { role: "admin" },
-      select: { id: true, email: true, role: true, createdAt: true, updatedAt: true }
+  app.delete("/api/admin/moderators/:platformUserId", async (request, reply) => {
+    const { platformUserId } = request.params as { platformUserId: string };
+    const user = await app.prisma.user.findUnique({
+      where: { maxUserId: platformUserId }
+    });
+    if (!user) {
+      return reply.code(404).send({ error: "platform user not found" });
+    }
+    const existing = await app.prisma.moderator.findUnique({
+      where: { userId: user.id }
+    });
+    if (!existing) {
+      return reply.code(404).send({ error: "moderator not found" });
+    }
+    await app.prisma.moderator.delete({
+      where: { userId: user.id }
     });
 
     await app.prisma.moderationAction.create({
       data: {
         actionType: "revoke_moderator",
-        targetUserId: updated.id,
-        performedByUserId: request.adminSession!.adminUserId
+        targetType: "moderator",
+        targetId: existing.id,
+        targetUserId: user.id,
+        performedByUserId: request.adminSession!.adminUserId,
+        performedByType: "admin",
+        metadataJson: {
+          platformUserId: user.maxUserId
+        }
       }
     });
 
-    return reply.send(updated);
+    return reply.send({ ok: true });
   });
 };

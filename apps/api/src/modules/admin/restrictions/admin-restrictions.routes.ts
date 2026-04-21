@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { ensureRole } from "../admin-authz";
+import { ensureModeratorOrAdmin, getActor } from "../admin-authz";
 
 const createSchema = z.object({
   userId: z.string().min(1),
@@ -18,7 +18,7 @@ const patchSchema = z.object({
 
 export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", async (request, reply) => {
-    if (!ensureRole(request, reply, ["admin", "moderator"])) {
+    if (!ensureModeratorOrAdmin(request, reply)) {
       return;
     }
   });
@@ -61,6 +61,7 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "invalid body" });
     }
     const data = parsed.data;
+    const actor = getActor(request);
     const row = await app.prisma.userRestriction.create({
       data: {
         userId: data.userId,
@@ -69,14 +70,17 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
         reason: data.reason,
         startsAt: new Date(),
         endsAt: data.expiresAt ? new Date(data.expiresAt) : null,
-        createdByUserId: request.adminSession!.adminUserId
+        createdByUserId: actor.actorId
       }
     });
     await app.prisma.moderationAction.create({
       data: {
         actionType: data.type === "mute" ? "mute_user" : "block_user",
+        targetType: "user",
+        targetId: data.userId,
         targetUserId: data.userId,
-        performedByUserId: request.adminSession!.adminUserId,
+        performedByUserId: actor.actorId,
+        performedByType: actor.actorType,
         reason: data.reason ?? null,
         payloadJson: row
       }
@@ -90,6 +94,7 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) {
       return reply.code(400).send({ error: "invalid body" });
     }
+    const actor = getActor(request);
     const updated = await app.prisma.userRestriction.update({
       where: { id: restrictionId },
       data: {
@@ -102,7 +107,7 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
         reason: parsed.data.reason,
         endsAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : parsed.data.expiresAt,
         isActive: parsed.data.active,
-        updatedByUserId: request.adminSession!.adminUserId
+        updatedByUserId: actor.actorId
       }
     });
     return updated;
@@ -110,21 +115,115 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/api/admin/restrictions/:restrictionId/revoke", async (request, reply) => {
     const { restrictionId } = request.params as { restrictionId: string };
+    const actor = getActor(request);
     const revoked = await app.prisma.userRestriction.update({
       where: { id: restrictionId },
       data: {
         isActive: false,
         revokedAt: new Date(),
-        revokedByUserId: request.adminSession!.adminUserId
+        revokedByUserId: actor.actorId
       }
     });
     await app.prisma.moderationAction.create({
       data: {
         actionType: revoked.restrictionType === "temporary_mute" ? "unmute_user" : "unblock_user",
+        targetType: "user",
+        targetId: revoked.userId,
         targetUserId: revoked.userId,
-        performedByUserId: request.adminSession!.adminUserId
+        performedByUserId: actor.actorId,
+        performedByType: actor.actorType
       }
     });
     return reply.send(revoked);
+  });
+
+  app.post("/api/moderation/users/:userId/mute", async (request, reply) => {
+    if (!ensureModeratorOrAdmin(request, reply)) {
+      return;
+    }
+    const { userId } = request.params as { userId: string };
+    const actor = getActor(request);
+    const row = await app.prisma.userRestriction.create({
+      data: {
+        userId,
+        scopeType: "global",
+        restrictionType: "temporary_mute",
+        startsAt: new Date(),
+        createdByUserId: actor.actorId
+      }
+    });
+    await app.prisma.moderationAction.create({
+      data: {
+        actionType: "mute_user",
+        targetType: "user",
+        targetId: userId,
+        targetUserId: userId,
+        performedByUserId: actor.actorId,
+        performedByType: actor.actorType,
+        payloadJson: row
+      }
+    });
+    return row;
+  });
+
+  app.post("/api/moderation/users/:userId/block", async (request, reply) => {
+    if (!ensureModeratorOrAdmin(request, reply)) {
+      return;
+    }
+    const { userId } = request.params as { userId: string };
+    const actor = getActor(request);
+    const row = await app.prisma.userRestriction.create({
+      data: {
+        userId,
+        scopeType: "global",
+        restrictionType: "permanent_block",
+        startsAt: new Date(),
+        createdByUserId: actor.actorId
+      }
+    });
+    await app.prisma.moderationAction.create({
+      data: {
+        actionType: "block_user",
+        targetType: "user",
+        targetId: userId,
+        targetUserId: userId,
+        performedByUserId: actor.actorId,
+        performedByType: actor.actorType,
+        payloadJson: row
+      }
+    });
+    return row;
+  });
+
+  app.post("/api/moderation/users/:userId/unblock", async (request, reply) => {
+    if (!ensureModeratorOrAdmin(request, reply)) {
+      return;
+    }
+    const { userId } = request.params as { userId: string };
+    const actor = getActor(request);
+    await app.prisma.userRestriction.updateMany({
+      where: {
+        userId,
+        isActive: true,
+        scopeType: "global",
+        restrictionType: "permanent_block"
+      },
+      data: {
+        isActive: false,
+        revokedAt: new Date(),
+        revokedByUserId: actor.actorId
+      }
+    });
+    await app.prisma.moderationAction.create({
+      data: {
+        actionType: "unblock_user",
+        targetType: "user",
+        targetId: userId,
+        targetUserId: userId,
+        performedByUserId: actor.actorId,
+        performedByType: actor.actorType
+      }
+    });
+    return { ok: true };
   });
 };

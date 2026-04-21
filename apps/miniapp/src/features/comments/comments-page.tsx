@@ -2,10 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import {
   authByDevMock,
   authByInitData,
+  blockUserByModerator,
   createComment,
   deleteOwnComment,
+  getMeRole,
   getComments,
   getPost,
+  moderateCommentByModerator,
+  muteUserByModerator,
+  unblockUserByModerator,
   updateOwnComment,
   uploadCommentImage
 } from "../../lib/api-client";
@@ -37,6 +42,7 @@ export function CommentsPage() {
   const [replyToMessage, setReplyToMessage] = useState<CommentItemModel | null>(null);
   const [selfDisplayHint, setSelfDisplayHint] = useState<string | null>(null);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const [role, setRole] = useState<"user" | "moderator">("user");
 
   function toBootstrapErrorMessage(error: unknown): string {
     if (!(error instanceof Error)) return "Ошибка загрузки данных";
@@ -118,6 +124,12 @@ export function CommentsPage() {
         }
 
         setUserId(auth.userId);
+        try {
+          const meRole = await getMeRole(auth.userId);
+          setRole(meRole.role);
+        } catch {
+          setRole("user");
+        }
         const postIdFromAuth = auth.startParam?.replace(/^post_/, "").trim() ?? "";
         const finalPostId = resolvedPostId || postIdFromAuth;
         setPostId(finalPostId);
@@ -181,6 +193,24 @@ export function CommentsPage() {
           onDelete={async (commentId) => {
             await deleteOwnComment(commentId, userId);
             await reloadComments(postId);
+          }}
+          canModerate={role === "moderator"}
+          onModerateDelete={async (commentId) => {
+            if (!window.confirm("Delete comment as moderator?")) return;
+            await moderateCommentByModerator(userId, commentId, "delete");
+            await reloadComments(postId);
+          }}
+          onMuteUser={async (targetUserId) => {
+            if (!window.confirm("Mute this user?")) return;
+            await muteUserByModerator(userId, targetUserId);
+          }}
+          onBlockUser={async (targetUserId) => {
+            if (!window.confirm("Block this user?")) return;
+            await blockUserByModerator(userId, targetUserId);
+          }}
+          onUnblockUser={async (targetUserId) => {
+            if (!window.confirm("Unblock this user?")) return;
+            await unblockUserByModerator(userId, targetUserId);
           }}
         />
       ) : (
