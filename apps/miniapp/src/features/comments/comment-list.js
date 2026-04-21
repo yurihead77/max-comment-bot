@@ -1,5 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useRef, useState } from "react";
+import { getModerationUserState } from "../../lib/api-client";
 import { CommentContextMenu } from "./comment-context-menu";
 import { CommentItem } from "./comment-item";
 import { COMMENT_EMPTY_SUBTITLE, COMMENT_EMPTY_TITLE } from "./comment-ui-strings";
@@ -7,6 +8,7 @@ import { MessageList } from "./message-list";
 export function CommentList({ comments, currentUserId, selfDisplayHint, postId, onEdit, onDelete, onReply, canModerate, onModerateDelete, onMuteUser, onBlockUser, onUnblockUser }) {
     const scrollRef = useRef(null);
     const [menu, setMenu] = useState(null);
+    const [targetModerationState, setTargetModerationState] = useState(null);
     const [reactions, setReactions] = useState({});
     useEffect(() => {
         const el = scrollRef.current;
@@ -36,6 +38,29 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
     const empty = comments.length === 0;
     const menuId = menu?.comment.id;
     const menuReactions = menuId ? reactions[menuId] : undefined;
+    useEffect(() => {
+        if (!menu?.comment || !canModerate || menu.comment.authorId === currentUserId) {
+            setTargetModerationState(null);
+            return;
+        }
+        let cancelled = false;
+        void (async () => {
+            try {
+                const state = await getModerationUserState(currentUserId, menu.comment.authorId);
+                if (!cancelled) {
+                    setTargetModerationState({ isMuted: state.isMuted, isBlocked: state.isBlocked });
+                }
+            }
+            catch {
+                if (!cancelled) {
+                    setTargetModerationState(null);
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [menu?.comment?.id, canModerate, currentUserId]);
     return (_jsxs(_Fragment, { children: [_jsx("div", { className: "comments-app__scroll", ref: scrollRef, children: empty ? (_jsxs("div", { className: "chat-empty", "aria-live": "polite", children: [_jsx("p", { className: "chat-empty__title", children: COMMENT_EMPTY_TITLE }), _jsx("p", { className: "chat-empty__subtitle", children: COMMENT_EMPTY_SUBTITLE })] })) : (_jsx(MessageList, { comments: comments, renderMessage: (comment, index) => {
                         const prev = comments[index - 1];
                         const grouped = Boolean(prev && prev.authorId === comment.authorId);
@@ -52,5 +77,5 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
                 }, onEdit: (c) => {
                     onEdit(c);
                     setMenu(null);
-                }, onDelete: (id) => void onDelete(id), canModerate: canModerate, onModerateDelete: (id) => void onModerateDelete(id), onMuteUser: (id) => void onMuteUser(id), onBlockUser: (id) => void onBlockUser(id), onUnblockUser: (id) => void onUnblockUser(id) })] }));
+                }, onDelete: (id) => void onDelete(id), canModerate: canModerate, onModerateDelete: (id) => void onModerateDelete(id), onMuteUser: (id) => void onMuteUser(id), onBlockUser: (id) => void onBlockUser(id), onUnblockUser: (id) => void onUnblockUser(id), targetModerationState: targetModerationState })] }));
 }

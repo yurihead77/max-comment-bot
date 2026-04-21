@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { ensureModeratorOrAdmin, getActor } from "../admin-authz";
+import { ensureCanModerateTargetUser } from "../moderation/moderation-policy";
 
 const createSchema = z.object({
   userId: z.string().min(1),
@@ -61,6 +62,10 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "invalid body" });
     }
     const data = parsed.data;
+    const policy = await ensureCanModerateTargetUser(request, reply, data.userId);
+    if (!policy.ok) {
+      return;
+    }
     const actor = getActor(request);
     const row = await app.prisma.userRestriction.create({
       data: {
@@ -95,6 +100,14 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "invalid body" });
     }
     const actor = getActor(request);
+    const existing = await app.prisma.userRestriction.findUnique({ where: { id: restrictionId } });
+    if (!existing) {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const policy = await ensureCanModerateTargetUser(request, reply, existing.userId);
+    if (!policy.ok) {
+      return;
+    }
     const updated = await app.prisma.userRestriction.update({
       where: { id: restrictionId },
       data: {
@@ -116,6 +129,14 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
   app.post("/api/admin/restrictions/:restrictionId/revoke", async (request, reply) => {
     const { restrictionId } = request.params as { restrictionId: string };
     const actor = getActor(request);
+    const existing = await app.prisma.userRestriction.findUnique({ where: { id: restrictionId } });
+    if (!existing) {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const policy = await ensureCanModerateTargetUser(request, reply, existing.userId);
+    if (!policy.ok) {
+      return;
+    }
     const revoked = await app.prisma.userRestriction.update({
       where: { id: restrictionId },
       data: {
@@ -142,6 +163,10 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
       return;
     }
     const { userId } = request.params as { userId: string };
+    const policy = await ensureCanModerateTargetUser(request, reply, userId);
+    if (!policy.ok) {
+      return;
+    }
     const actor = getActor(request);
     const row = await app.prisma.userRestriction.create({
       data: {
@@ -171,6 +196,10 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
       return;
     }
     const { userId } = request.params as { userId: string };
+    const policy = await ensureCanModerateTargetUser(request, reply, userId);
+    if (!policy.ok) {
+      return;
+    }
     const actor = getActor(request);
     const row = await app.prisma.userRestriction.create({
       data: {
@@ -200,6 +229,10 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
       return;
     }
     const { userId } = request.params as { userId: string };
+    const policy = await ensureCanModerateTargetUser(request, reply, userId);
+    if (!policy.ok) {
+      return;
+    }
     const actor = getActor(request);
     await app.prisma.userRestriction.updateMany({
       where: {
@@ -225,5 +258,49 @@ export const adminRestrictionsRoutes: FastifyPluginAsync = async (app) => {
       }
     });
     return { ok: true };
+  });
+
+  app.get("/api/moderation/users/:userId/state", async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const user = await app.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, maxUserId: true }
+    });
+    if (!user) {
+      return reply.code(404).send({ error: "user not found" });
+    }
+
+    const policy = await ensureCanModerateTargetUser(request, reply, user.id);
+    if (!policy.ok) {
+      return;
+    }
+
+    const now = new Date();
+    const active = await app.prisma.userRestriction.findMany({
+      where: {
+        userId: user.id,
+        scopeType: "global",
+        isActive: true,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gt: now } }]
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    const normalized = active.map((item) => ({
+      id: item.id,
+      type: item.restrictionType === "temporary_mute" ? "mute" : "block",
+      createdAt: item.createdAt,
+      expiresAt: item.endsAt,
+      reason: item.reason
+    }));
+
+    return {
+      userId: user.id,
+      platformUserId: user.maxUserId,
+      isMuted: normalized.some((r) => r.type === "mute"),
+      isBlocked: normalized.some((r) => r.type === "block"),
+      activeRestrictions: normalized
+    };
   });
 };

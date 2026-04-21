@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { syncPostCommentsCount } from "../../comments/comments.service";
 import { ensureModeratorOrAdmin, getActor } from "../admin-authz";
+import { ensureCanModerateTargetUser } from "../moderation/moderation-policy";
 
 const patchSchema = z.object({
   action: z.enum(["hide", "unhide", "delete", "restore"]),
@@ -138,6 +139,10 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
     if (!existing) {
       return reply.code(404).send({ error: "not found" });
     }
+    const policy = await ensureCanModerateTargetUser(request, reply, existing.authorId);
+    if (!policy.ok) {
+      return;
+    }
 
     const now = new Date();
     const nextStatus =
@@ -187,6 +192,10 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
     const existing = await app.prisma.comment.findUnique({ where: { id: commentId } });
     if (!existing) {
       return reply.code(404).send({ error: "not found" });
+    }
+    const policy = await ensureCanModerateTargetUser(request, reply, existing.authorId);
+    if (!policy.ok) {
+      return;
     }
     const now = new Date();
     const nextStatus = action === "hide" ? "hidden" : action === "delete" ? "deleted" : "active";

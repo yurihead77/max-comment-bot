@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getModerationUserState } from "../../lib/api-client";
 import { CommentContextMenu } from "./comment-context-menu";
 import { CommentItem, type CommentItemModel } from "./comment-item";
 import { COMMENT_EMPTY_SUBTITLE, COMMENT_EMPTY_TITLE } from "./comment-ui-strings";
@@ -35,6 +36,10 @@ export function CommentList({
 }: CommentListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ comment: CommentItemModel; x: number; y: number } | null>(null);
+  const [targetModerationState, setTargetModerationState] = useState<{
+    isMuted: boolean;
+    isBlocked: boolean;
+  } | null>(null);
   const [reactions, setReactions] = useState<
     Record<string, { counts: Record<string, number>; pick?: string }>
   >({});
@@ -66,6 +71,29 @@ export function CommentList({
   const empty = comments.length === 0;
   const menuId = menu?.comment.id;
   const menuReactions = menuId ? reactions[menuId] : undefined;
+
+  useEffect(() => {
+    if (!menu?.comment || !canModerate || menu.comment.authorId === currentUserId) {
+      setTargetModerationState(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const state = await getModerationUserState(currentUserId, menu.comment.authorId);
+        if (!cancelled) {
+          setTargetModerationState({ isMuted: state.isMuted, isBlocked: state.isBlocked });
+        }
+      } catch {
+        if (!cancelled) {
+          setTargetModerationState(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [menu?.comment?.id, canModerate, currentUserId]);
 
   return (
     <>
@@ -129,6 +157,7 @@ export function CommentList({
         onMuteUser={(id) => void onMuteUser(id)}
         onBlockUser={(id) => void onBlockUser(id)}
         onUnblockUser={(id) => void onUnblockUser(id)}
+        targetModerationState={targetModerationState}
       />
     </>
   );

@@ -128,3 +128,12 @@ export async function unblockUserByModerator(userId, targetUserId) {
         throw new Error("failed to unblock user");
     }
 }
+export async function getModerationUserState(actorUserId, targetUserId) {
+    const response = await fetch(`${API_BASE}/api/moderation/users/${targetUserId}/state`, {
+        headers: { "x-user-id": actorUserId }
+    });
+    if (!response.ok) {
+        throw new Error("failed to fetch moderation state");
+    }
+    return response.json();
+}

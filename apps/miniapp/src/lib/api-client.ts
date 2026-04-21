@@ -157,3 +157,25 @@ export async function unblockUserByModerator(userId: string, targetUserId: strin
     throw new Error("failed to unblock user");
   }
 }
+
+export async function getModerationUserState(actorUserId: string, targetUserId: string) {
+  const response = await fetch(`${API_BASE}/api/moderation/users/${targetUserId}/state`, {
+    headers: { "x-user-id": actorUserId }
+  });
+  if (!response.ok) {
+    throw new Error("failed to fetch moderation state");
+  }
+  return response.json() as Promise<{
+    userId: string;
+    platformUserId: string;
+    isMuted: boolean;
+    isBlocked: boolean;
+    activeRestrictions: Array<{
+      id: string;
+      type: "mute" | "block";
+      createdAt: string;
+      expiresAt: string | null;
+      reason: string | null;
+    }>;
+  }>;
+}
