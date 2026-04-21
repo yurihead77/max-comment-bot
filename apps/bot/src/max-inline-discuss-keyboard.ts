@@ -11,6 +11,7 @@ export type DiscussInlineKeyboardAttachment = {
       Array<
         | { type: "open_app"; text: string; web_app: string; payload: string; contact_id?: number }
         | { type: "link"; text: string; url: string }
+        | { type: "callback"; text: string; payload: string; intent?: "default" }
       >
     >;
   };
@@ -49,6 +50,54 @@ export function buildDiscussInlineKeyboardAttachment(args: {
     type: "inline_keyboard",
     payload: {
       buttons: [[{ type: "link", text: args.buttonText, url: args.linkUrl }]]
+    }
+  };
+}
+
+export function buildModerationCardKeyboardAttachment(args: {
+  openAppWebApp: string;
+  openAppContactId?: number;
+  reportId: string;
+}): DiscussInlineKeyboardAttachment {
+  const openAppButton: { type: "open_app"; text: string; web_app: string; payload: string; contact_id?: number } = {
+    type: "open_app",
+    text: "Открыть жалобу",
+    web_app: args.openAppWebApp,
+    payload: `report_${args.reportId}`
+  };
+  if (typeof args.openAppContactId === "number") {
+    openAppButton.contact_id = args.openAppContactId;
+  }
+
+  const cb = (text: string, action: "delete" | "keep" | "mute" | "block") => ({
+    type: "callback" as const,
+    text,
+    payload: `report_action:${args.reportId}:${action}`,
+    intent: "default" as const
+  });
+
+  return {
+    type: "inline_keyboard",
+    payload: {
+      buttons: [
+        [openAppButton, cb("Удалить", "delete")],
+        [cb("Оставить", "keep"), cb("Mute", "mute"), cb("Block", "block")]
+      ]
+    }
+  };
+}
+
+export function buildModerationActionsOnlyKeyboardAttachment(args: { reportId: string }): DiscussInlineKeyboardAttachment {
+  const cb = (text: string, action: "delete" | "keep" | "mute" | "block") => ({
+    type: "callback" as const,
+    text,
+    payload: `report_action:${args.reportId}:${action}`,
+    intent: "default" as const
+  });
+  return {
+    type: "inline_keyboard",
+    payload: {
+      buttons: [[cb("Удалить", "delete")], [cb("Оставить", "keep"), cb("Mute", "mute"), cb("Block", "block")]]
     }
   };
 }

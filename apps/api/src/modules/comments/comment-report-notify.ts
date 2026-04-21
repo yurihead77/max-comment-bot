@@ -54,7 +54,6 @@ export async function sendModerationChatReportNotification(
   ].filter(Boolean) as string[];
 
   const text = lines.join("\n");
-  const startParam = `report_${args.reportId}`;
   const botUrl = `${env.BOT_INTERNAL_BASE_URL.replace(/\/$/, "")}/internal/send-plain-message`;
   try {
     const res = await fetch(botUrl, {
@@ -63,9 +62,8 @@ export async function sendModerationChatReportNotification(
       body: JSON.stringify({
         chatId: moderationChatMaxId,
         text,
-        openAppButton: {
-          text: "Открыть жалобу",
-          startParam
+        moderationCard: {
+          reportId: args.reportId
         }
       })
     });

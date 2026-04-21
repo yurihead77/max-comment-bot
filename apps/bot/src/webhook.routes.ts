@@ -10,10 +10,12 @@ import {
   truncateJson,
   verifyWebhookSecret
 } from "./max-webhook-payload";
+import type { MaxClient } from "./max-client";
 
 export interface WebhookRoutesOpts {
   apiBaseUrl: string;
   maxWebhookSecret?: string;
+  maxClient: MaxClient;
 }
 
 async function postInternalRegister(
@@ -81,7 +83,7 @@ async function postInternalSyncButton(
 }
 
 export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, opts) => {
-  const { apiBaseUrl, maxWebhookSecret } = opts;
+  const { apiBaseUrl, maxWebhookSecret, maxClient } = opts;
 
   app.post("/webhook/max", async (request, reply) => {
     const hdr = headersToLogObject(request.headers as Record<string, string | string[] | undefined>);
@@ -230,6 +232,139 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
         postId: reg.id,
         syncButton: synced
       });
+    }
+
+    if (parsed.kind === "message_callback") {
+      const callbackId = String(parsed.callback.callback_id ?? parsed.callback.callbackId ?? "");
+      const cbUserId = String(
+        (parsed.callback.user && typeof parsed.callback.user === "object"
+          ? (parsed.callback.user as any).user_id ?? (parsed.callback.user as any).userId
+          : undefined) ?? ""
+      );
+      const payload = String(parsed.callback.payload ?? "");
+      const chatId = extractChatIdFromMessage(parsed.message);
+
+      request.log.info(
+        {
+          webhook: "message_callback_extracted",
+          chatId,
+          callbackId,
+          callbackUserId: cbUserId,
+          payloadPreview: payload.slice(0, 200)
+        },
+        "MAX message_callback received"
+      );
+
+      if (!callbackId || !cbUserId || !payload) {
+        if (callbackId) {
+          await maxClient.answerCallback({
+            callbackId,
+            notification: "Ошибка: неполный callback"
+          }).catch(() => {});
+        }
+        return reply.send({ ok: true, handled: "message_callback_invalid" });
+      }
+
+      const m = /^report_action:([^:]+):(delete|keep|mute|block)$/.exec(payload);
+      if (!m) {
+        await maxClient.answerCallback({ callbackId, notification: "Неизвестное действие" }).catch(() => {});
+        return reply.send({ ok: true, handled: "message_callback_unknown_payload" });
+      }
+
+      const reportId = m[1]!;
+      const action = m[2]! as "delete" | "keep" | "mute" | "block";
+
+      const base = apiBaseUrl.replace(/\/+$/, "");
+      const headers = { "content-type": "application/json", "x-max-user-id": cbUserId };
+
+      const ctxUrl = `${base}/api/moderation/reports/${encodeURIComponent(reportId)}/context`;
+      let ctx: any;
+      try {
+        const res = await fetch(ctxUrl, { headers });
+        const text = await res.text();
+        ctx = text ? JSON.parse(text) : {};
+        if (!res.ok) {
+          await maxClient.answerCallback({ callbackId, notification: "Forbidden" }).catch(() => {});
+          return reply.send({ ok: true, handled: "message_callback_forbidden", status: res.status });
+        }
+      } catch (e) {
+        await maxClient.answerCallback({ callbackId, notification: "Ошибка загрузки контекста" }).catch(() => {});
+        return reply.send({ ok: true, handled: "message_callback_ctx_failed" });
+      }
+
+      // If already handled -> no-op, keep only Open App
+      const alreadyHandled = ctx.reportStatus && ctx.reportStatus !== "open";
+      if (alreadyHandled) {
+        const text = String(
+          ctx?.post?.chat?.title ? `⚠ Жалоба на комментарий\nКанал: ${ctx.post.chat.title}` : "⚠ Жалоба на комментарий"
+        );
+        await maxClient.answerCallback({
+          callbackId,
+          notification: "Жалоба уже обработана",
+          message: {
+            text,
+            attachments: [maxClient.openAppOnlyKeyboardAttachment("Открыть жалобу", `report_${reportId}`)]
+          }
+        }).catch(() => {});
+        return reply.send({ ok: true, handled: "message_callback_already_handled" });
+      }
+
+      // Execute action via API
+      let statusLine = "";
+      try {
+        if (action === "delete") {
+          const url = `${base}/api/moderation/comments/${encodeURIComponent(ctx.commentId)}/delete`;
+          const r = await fetch(url, { method: "POST", headers });
+          if (!r.ok) throw new Error(`delete HTTP ${r.status}`);
+          statusLine = "Статус: удалено";
+        } else if (action === "keep") {
+          const url = `${base}/api/moderation/reports/${encodeURIComponent(reportId)}/resolve-keep`;
+          const r = await fetch(url, { method: "POST", headers });
+          if (!r.ok) throw new Error(`keep HTTP ${r.status}`);
+          statusLine = "Статус: оставлено";
+        } else if (action === "mute") {
+          const urlMute = `${base}/api/moderation/users/${encodeURIComponent(ctx.commentAuthor.userId)}/mute`;
+          const r1 = await fetch(urlMute, { method: "POST", headers });
+          if (!r1.ok) throw new Error(`mute HTTP ${r1.status}`);
+          // Minimal rule: mute closes reports as resolved_keep
+          const urlKeep = `${base}/api/moderation/reports/${encodeURIComponent(reportId)}/resolve-keep`;
+          await fetch(urlKeep, { method: "POST", headers });
+          statusLine = "Статус: пользователь замьючен";
+        } else if (action === "block") {
+          const urlBlock = `${base}/api/moderation/users/${encodeURIComponent(ctx.commentAuthor.userId)}/block`;
+          const r1 = await fetch(urlBlock, { method: "POST", headers });
+          if (!r1.ok) throw new Error(`block HTTP ${r1.status}`);
+          const urlKeep = `${base}/api/moderation/reports/${encodeURIComponent(reportId)}/resolve-keep`;
+          await fetch(urlKeep, { method: "POST", headers });
+          statusLine = "Статус: пользователь заблокирован";
+        }
+      } catch (e) {
+        request.log.error({ err: e instanceof Error ? e.message : String(e), action, reportId }, "moderation card action failed");
+        await maxClient.answerCallback({ callbackId, notification: "Не удалось выполнить действие" }).catch(() => {});
+        return reply.send({ ok: true, handled: "message_callback_action_failed" });
+      }
+
+      // Build final message text (keep Open App via plain text link in body for safety)
+      const lines = [
+        "⚠ Жалоба на комментарий",
+        ctx.post?.chat?.title ? `Канал: ${ctx.post.chat.title} (${ctx.channelMaxChatId})` : `Канал: ${ctx.channelMaxChatId}`,
+        ctx.post?.maxMessageId ? `Пост (MAX message id): ${ctx.post.maxMessageId}` : undefined,
+        ctx.commentAuthor?.displayName ? `Автор: ${ctx.commentAuthor.displayName} (MAX user id: ${ctx.commentAuthor.maxUserId})` : undefined,
+        ctx.commentText ? `Текст: ${String(ctx.commentText).slice(0, 500)}${String(ctx.commentText).length > 500 ? "…" : ""}` : undefined,
+        typeof ctx.reportsOpenCount === "number" ? `Открытых жалоб: ${ctx.reportsOpenCount}` : undefined,
+        statusLine
+      ].filter(Boolean) as string[];
+
+      await maxClient.answerCallback({
+        callbackId,
+        notification: "Готово",
+        message: {
+          text: lines.join("\n"),
+          attachments: [maxClient.openAppOnlyKeyboardAttachment("Открыть жалобу", `report_${reportId}`)]
+        }
+      }).catch(() => {});
+
+      return reply.send({ ok: true, handled: "message_callback_action_ok", action, reportId });
     }
 
     request.log.warn(

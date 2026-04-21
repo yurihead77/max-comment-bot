@@ -130,6 +130,14 @@ export function extractSenderUserId(message: Record<string, unknown>): string | 
 export type ParsedMaxUpdate =
   | { kind: "message_created"; updateType: string; timestamp?: number; message: Record<string, unknown> }
   | { kind: "bot_started"; updateType: string; timestamp?: number; raw: Record<string, unknown> }
+  | {
+      kind: "message_callback";
+      updateType: string;
+      timestamp?: number;
+      callback: Record<string, unknown>;
+      message: Record<string, unknown>;
+      raw: Record<string, unknown>;
+    }
   | { kind: "unknown"; updateType: string; timestamp?: number; raw: Record<string, unknown> };
 
 export function parseMaxUpdate(body: Record<string, unknown>): ParsedMaxUpdate {
@@ -148,6 +156,18 @@ export function parseMaxUpdate(body: Record<string, unknown>): ParsedMaxUpdate {
 
   if (updateType === "bot_started") {
     return { kind: "bot_started", updateType, timestamp, raw: body };
+  }
+
+  if (updateType === "message_callback" && body.callback && typeof body.callback === "object") {
+    const msg = body.message && typeof body.message === "object" ? (body.message as Record<string, unknown>) : {};
+    return {
+      kind: "message_callback",
+      updateType,
+      timestamp,
+      callback: body.callback as Record<string, unknown>,
+      message: msg,
+      raw: body
+    };
   }
 
   return { kind: "unknown", updateType, timestamp, raw: body };

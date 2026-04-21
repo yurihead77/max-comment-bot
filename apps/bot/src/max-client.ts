@@ -154,6 +154,15 @@ export class MaxClient {
     return this.buildMessagesUrl({ message_id: messageId });
   }
 
+  /** Diagnostic: POST /answers?callback_id=…&v=… */
+  postAnswersUrl(callbackId: string): string {
+    const baseRoot = `${normalizeApiBase(this.baseUrl)}/`;
+    const u = new URL("answers", baseRoot);
+    u.searchParams.set("v", this.apiVersion);
+    u.searchParams.set("callback_id", callbackId);
+    return u.toString();
+  }
+
   private buildMessagesUrl(query: Record<string, string | undefined>): string {
     const baseRoot = `${normalizeApiBase(this.baseUrl)}/`;
     const u = new URL("messages", baseRoot);
@@ -167,6 +176,18 @@ export class MaxClient {
   private discussKeyboardAttachment(buttonText: string, startParam: string) {
     return buildDiscussInlineKeyboardAttachment({
       mode: this.discussInlineMode,
+      openAppWebApp: this.openAppId,
+      openAppContactId: this.openAppContactId,
+      linkUrl: this.webAppUrl,
+      buttonText,
+      startParam
+    });
+  }
+
+  /** Inline keyboard with a single open_app row (always open_app, even when discussInlineMode=link). */
+  openAppOnlyKeyboardAttachment(buttonText: string, startParam: string) {
+    return buildDiscussInlineKeyboardAttachment({
+      mode: "open_app",
       openAppWebApp: this.openAppId,
       openAppContactId: this.openAppContactId,
       linkUrl: this.webAppUrl,
@@ -225,6 +246,19 @@ export class MaxClient {
     const preview = JSON.stringify(parsed).slice(0, 300);
     assertMaxCommandSuccess(parsed, url, response.status, response.headers.get("content-type"), preview);
     return parsed;
+  }
+
+  /** Official callback answer (updates message + optional toast). Docs: https://dev.max.ru/docs-api/methods/POST/answers */
+  async answerCallback(payload: { callbackId: string; message?: { text?: string; attachments?: unknown[] | null }; notification?: string | null }) {
+    const url = this.postAnswersUrl(payload.callbackId);
+    const body: Record<string, unknown> = {};
+    if (payload.message) {
+      body.message = payload.message;
+    }
+    if (payload.notification !== undefined) {
+      body.notification = payload.notification;
+    }
+    return this.maxJsonFetch("POST", url, body);
   }
 
   /**
@@ -300,6 +334,16 @@ export class MaxClient {
       attachments: [this.discussKeyboardAttachment(payload.buttonText, payload.startParam)]
     };
     this.logDiscussOutbound("POST /messages", body, payload.buttonText, payload.startParam);
+    return this.maxJsonFetch("POST", url, body);
+  }
+
+  /** Generic message send with attachments (inline keyboards, etc). */
+  async sendMessage(payload: { chatId: string; text: string; attachments?: unknown[] | null }) {
+    const url = this.buildMessagesUrl({ chat_id: payload.chatId });
+    const body: Record<string, unknown> = { text: payload.text };
+    if (payload.attachments !== undefined) {
+      body.attachments = payload.attachments;
+    }
     return this.maxJsonFetch("POST", url, body);
   }
 
