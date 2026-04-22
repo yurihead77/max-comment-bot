@@ -132,6 +132,8 @@ body {
   width: 100%;
   justify-content: flex-start;
   margin-top: 4px;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 .chat-row--own {
@@ -182,6 +184,10 @@ body {
   min-width: 0;
   max-width: 100%;
   box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .chat-message-stack {
@@ -368,11 +374,38 @@ body {
   font-size: 1.1rem;
   line-height: 1;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 .chat-bubble__menu-hit:hover {
   opacity: 1;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.chat-bubble:focus,
+.chat-bubble:active,
+.chat-bubble__menu-hit:focus,
+.chat-bubble__menu-hit:active,
+.chat-bubble__reply-quote:focus,
+.chat-bubble__reply-quote:active {
+  outline: none;
+  box-shadow: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .chat-bubble,
+  .chat-bubble__menu-hit,
+  .chat-bubble__reply-quote {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .chat-bubble:focus-visible,
+  .chat-bubble__menu-hit:focus-visible,
+  .chat-bubble__reply-quote:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
 }
 
 .chat-bubble--own .chat-bubble__menu-hit:hover {
