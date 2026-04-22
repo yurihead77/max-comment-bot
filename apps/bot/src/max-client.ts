@@ -1,4 +1,5 @@
 import { buildDiscussInlineKeyboardAttachment, type MaxDiscussInlineMode } from "./max-inline-discuss-keyboard";
+import { extractMessageText } from "./max-webhook-payload";
 
 export interface PublishPostPayload {
   chatId: string;
@@ -13,6 +14,14 @@ export interface SyncButtonPayload {
   buttonText: string;
   startParam: string;
 }
+
+export type EditDiscussButtonMergeStats = {
+  messageId: string;
+  fetchedAttachmentCount: number;
+  mergedAttachmentCount: number;
+  beforeAttachmentTypes: string[];
+  afterAttachmentTypes: string[];
+};
 
 export type MaxClientLogOpenAppPayload = (meta: Record<string, unknown>) => void;
 
@@ -106,6 +115,44 @@ function assertMaxCommandSuccess(
   }
 }
 
+function extractFirstMessageFromGetMessages(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") return null;
+  const o = data as Record<string, unknown>;
+  if (Array.isArray(o.messages) && o.messages.length > 0 && typeof o.messages[0] === "object" && o.messages[0] !== null) {
+    return o.messages[0] as Record<string, unknown>;
+  }
+  if (o.message && typeof o.message === "object" && o.message !== null) {
+    return o.message as Record<string, unknown>;
+  }
+  return null;
+}
+
+function getMessageBodyRecord(message: Record<string, unknown>): Record<string, unknown> | null {
+  const b = message.body;
+  return b && typeof b === "object" && !Array.isArray(b) ? (b as Record<string, unknown>) : null;
+}
+
+function readBodyAttachments(body: Record<string, unknown> | null): unknown[] {
+  if (!body) return [];
+  const raw = body.attachments;
+  return Array.isArray(raw) ? raw : [];
+}
+
+function isInlineKeyboardAttachment(att: unknown): boolean {
+  return Boolean(
+    att &&
+      typeof att === "object" &&
+      "type" in (att as object) &&
+      String((att as { type: unknown }).type).toLowerCase() === "inline_keyboard"
+  );
+}
+
+function summarizeAttachmentTypes(attachments: unknown[]): string[] {
+  return attachments.map((a) =>
+    a && typeof a === "object" && "type" in (a as object) ? String((a as { type: unknown }).type) : "?"
+  );
+}
+
 export type MaxDebugPutResult = {
   url: string;
   httpOk: boolean;
@@ -154,6 +201,11 @@ export class MaxClient {
     return this.buildMessagesUrl({ message_id: messageId });
   }
 
+  /** Diagnostic: GET /messages?message_ids=…&v=… */
+  getMessagesUrl(messageId: string): string {
+    return this.buildMessagesUrl({ message_ids: messageId });
+  }
+
   /** Diagnostic: POST /answers?callback_id=…&v=… */
   postAnswersUrl(callbackId: string): string {
     const baseRoot = `${normalizeApiBase(this.baseUrl)}/`;
@@ -196,7 +248,13 @@ export class MaxClient {
     });
   }
 
-  private logDiscussOutbound(operation: string, body: unknown, buttonText: string, startParam: string): void {
+  private logDiscussOutbound(
+    operation: string,
+    body: unknown,
+    buttonText: string,
+    startParam: string,
+    mergeDiag?: Record<string, unknown>
+  ): void {
     if (!this.logOpenAppPayload) return;
     let host: string | undefined;
     try {
@@ -221,8 +279,22 @@ export class MaxClient {
       openAppWebAppSource,
       openAppContactId: this.openAppContactId,
       attachmentsJsonPreview: serialized.slice(0, 16_000),
-      attachmentsJsonLen: serialized.length
+      attachmentsJsonLen: serialized.length,
+      ...(mergeDiag ?? {})
     });
+  }
+
+  private async maxJsonGet(url: string): Promise<unknown> {
+    console.log("=== MAX REQUEST META ===");
+    console.log({ url, method: "GET" });
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: this.token }
+    });
+    const parsed = await readMaxJsonResponse(response, url);
+    const preview = JSON.stringify(parsed).slice(0, 300);
+    assertMaxCommandSuccess(parsed, url, response.status, response.headers.get("content-type"), preview);
+    return parsed;
   }
 
   private async maxJsonFetch(method: "POST" | "PUT", url: string, body: unknown): Promise<unknown> {
@@ -355,15 +427,80 @@ export class MaxClient {
   }
 
   /**
-   * Updates only inline keyboard via official API (PUT /messages?message_id=…).
-   * Docs: https://dev.max.ru/docs-api/methods/PUT/messages — `attachments` replaces keyboard when provided.
+   * PUT /messages with explicit text + attachments (caller merges GET state + new keyboard).
+   * Docs: https://dev.max.ru/docs-api/methods/PUT/messages
    */
-  async editDiscussButton(payload: SyncButtonPayload) {
+  async editMessage(payload: { messageId: string; text: string; attachments: unknown[] }) {
     const url = this.buildMessagesUrl({ message_id: payload.messageId });
-    const body = {
-      attachments: [this.discussKeyboardAttachment(payload.buttonText, payload.startParam)]
-    };
-    this.logDiscussOutbound("PUT /messages", body, payload.buttonText, payload.startParam);
+    const body = { text: payload.text, attachments: payload.attachments };
     return this.maxJsonFetch("PUT", url, body);
+  }
+
+  /**
+   * Sync discuss inline keyboard on an existing channel message without dropping media/file attachments:
+   * GET /messages?message_ids=… → merge `body.attachments` (strip old `inline_keyboard`) + new keyboard → PUT /messages.
+   */
+  async editDiscussButton(payload: SyncButtonPayload): Promise<EditDiscussButtonMergeStats> {
+    const messageId = payload.messageId.trim();
+    const getUrl = this.buildMessagesUrl({ message_ids: messageId });
+    const fetched = await this.maxJsonGet(getUrl);
+    const message = extractFirstMessageFromGetMessages(fetched);
+    if (!message) {
+      const preview = JSON.stringify(fetched).slice(0, 800);
+      throw new MaxApiError(
+        `GET /messages returned no message for message_ids=${messageId}`,
+        getUrl,
+        502,
+        "application/json",
+        preview
+      );
+    }
+
+    const existingText = extractMessageText(message) ?? "";
+    const bodyRecord = getMessageBodyRecord(message);
+    const existingAttachments = readBodyAttachments(bodyRecord);
+    const beforeTypes = summarizeAttachmentTypes(existingAttachments);
+    console.log("=== MAX editDiscussButton (after GET /messages) ===");
+    console.log(
+      JSON.stringify({
+        messageId,
+        sourceAttachmentCount: existingAttachments.length,
+        sourceAttachmentTypes: beforeTypes
+      })
+    );
+    const withoutKeyboard = existingAttachments.filter((a) => !isInlineKeyboardAttachment(a));
+    const keyboard = this.discussKeyboardAttachment(payload.buttonText, payload.startParam);
+    const merged = [...withoutKeyboard, keyboard];
+    const afterTypes = summarizeAttachmentTypes(merged);
+    console.log("=== MAX editDiscussButton (merged PUT payload) ===");
+    console.log(
+      JSON.stringify({
+        messageId,
+        mergedAttachmentCount: merged.length,
+        mergedAttachmentTypes: afterTypes,
+        droppedInlineKeyboardAttachments: existingAttachments.length - withoutKeyboard.length
+      })
+    );
+
+    const putBody = { text: existingText, attachments: merged };
+    this.logDiscussOutbound("PUT /messages", putBody, payload.buttonText, payload.startParam, {
+      discussAttachmentMerge: true,
+      messageId,
+      getFetchedAttachmentCount: existingAttachments.length,
+      getAttachmentTypesBefore: beforeTypes,
+      mergedAttachmentCount: merged.length,
+      mergedAttachmentTypesAfter: afterTypes,
+      droppedInlineKeyboardAttachments: existingAttachments.length - withoutKeyboard.length
+    });
+
+    await this.editMessage({ messageId, text: existingText, attachments: merged });
+
+    return {
+      messageId,
+      fetchedAttachmentCount: existingAttachments.length,
+      mergedAttachmentCount: merged.length,
+      beforeAttachmentTypes: beforeTypes,
+      afterAttachmentTypes: afterTypes
+    };
   }
 }

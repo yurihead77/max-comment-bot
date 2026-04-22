@@ -140,20 +140,8 @@ async function bootstrap() {
     }
 
     const startParam = `post_${body.postId}`;
-    const maxApiTargetUrl = maxClient.putMessagesUrl(mid);
-
-    const syncPutPayloadPreview = JSON.stringify({
-      attachments: [
-        buildDiscussInlineKeyboardAttachment({
-          mode: env.MAX_OPEN_APP_DEBUG_MODE,
-          openAppWebApp: env.MAX_OPEN_APP_ID,
-          openAppContactId: env.MAX_OPEN_APP_CONTACT_ID,
-          linkUrl: env.MAX_WEBAPP_URL,
-          buttonText: body.buttonText,
-          startParam
-        })
-      ]
-    }).slice(0, 16_000);
+    const maxGetMessagesUrl = maxClient.getMessagesUrl(mid);
+    const maxPutMessagesUrl = maxClient.putMessagesUrl(mid);
 
     app.log.info(
       {
@@ -163,8 +151,9 @@ async function bootstrap() {
         messageId: mid,
         buttonText: body.buttonText,
         startParam,
-        maxApiMethod: "PUT /messages",
-        maxApiUrlRedacted: redactBotTokenInUrl(maxApiTargetUrl, env.MAX_BOT_TOKEN),
+        maxApiFlow: "GET /messages (read text + attachments) then PUT /messages (preserve media + inline_keyboard)",
+        maxGetMessagesUrlRedacted: redactBotTokenInUrl(maxGetMessagesUrl, env.MAX_BOT_TOKEN),
+        maxPutMessagesUrlRedacted: redactBotTokenInUrl(maxPutMessagesUrl, env.MAX_BOT_TOKEN),
         maxApiBaseUrl: env.MAX_API_BASE_URL,
         maxApiVersion: env.MAX_API_VERSION,
         maxBotTokenSha256Prefix: maxBotTokenSha256Prefix(env.MAX_BOT_TOKEN),
@@ -175,7 +164,6 @@ async function bootstrap() {
         inlineButtonType: env.MAX_OPEN_APP_DEBUG_MODE === "link" ? "link" : "open_app",
         openAppWebAppUsed: env.MAX_OPEN_APP_ID,
         openAppWebAppSource: "MAX_OPEN_APP_ID",
-        putRequestPayloadPreview: syncPutPayloadPreview,
         maxWebappHost: (() => {
           try {
             return new URL(env.MAX_WEBAPP_URL).host;
@@ -184,16 +172,28 @@ async function bootstrap() {
           }
         })()
       },
-      "internal sync-button: calling MAX API (PUT messages — token in Authorization header only)"
+      "internal sync-button: calling MAX API (GET then PUT messages — token in Authorization header only)"
     );
 
     try {
-      await maxClient.editDiscussButton({
+      const mergeStats = await maxClient.editDiscussButton({
         chatId: body.chatId,
         messageId: mid,
         buttonText: body.buttonText,
         startParam
       });
+      app.log.info(
+        {
+          route: "/internal/sync-button",
+          postId: body.postId,
+          messageId: mergeStats.messageId,
+          fetchedAttachmentCount: mergeStats.fetchedAttachmentCount,
+          mergedAttachmentCount: mergeStats.mergedAttachmentCount,
+          beforeAttachmentTypes: mergeStats.beforeAttachmentTypes,
+          afterAttachmentTypes: mergeStats.afterAttachmentTypes
+        },
+        "internal sync-button: MAX API OK (discuss keyboard merged without dropping attachments)"
+      );
       return reply.send({ ok: true });
     } catch (e) {
       if (e instanceof MaxApiError) {
@@ -219,7 +219,8 @@ async function bootstrap() {
             inlineButtonType: env.MAX_OPEN_APP_DEBUG_MODE === "link" ? "link" : "open_app",
             openAppWebAppUsed: env.MAX_OPEN_APP_ID,
             openAppWebAppSource: "MAX_OPEN_APP_ID",
-            putRequestPayloadPreview: syncPutPayloadPreview,
+            maxApiFlowNote:
+              "PUT body is built from GET /messages (text + attachments minus old inline_keyboard + new keyboard); see bot stdout for merge JSON.",
             ...(linkNotFound
               ? {
                   maxWebappUrlUsed: env.MAX_WEBAPP_URL,
