@@ -31,7 +31,6 @@ body {
   display: flex;
   flex-direction: column;
   height: var(--app-vh, 100dvh);
-  height: 100dvh;
   min-height: 100svh;
   width: 100%;
   max-width: 720px;
@@ -475,7 +474,7 @@ body {
   color: var(--max-chat-text);
   padding: 10px 12px;
   font-family: inherit;
-  font-size: 0.9375rem;
+  font-size: 16px;
 }
 
 .comment-input-form textarea:focus {
