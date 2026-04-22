@@ -93,6 +93,40 @@ pnpm run typecheck
 pnpm run build
 ```
 
+## Quick Deploy (external devs)
+
+Minimal server bootstrap sequence (after cloning repo to `/opt/max-comment-bot`):
+
+```bash
+pnpm install --frozen-lockfile
+pnpm db:generate
+pnpm db:preflight
+pnpm db:deploy
+pnpm db:seed
+pnpm build
+```
+
+Run processes (example with PM2 + existing env file):
+
+```bash
+pm2 start dist/server.js --name max-api -cwd /opt/max-comment-bot/apps/api --node-args="--env-file=/opt/max-comment-bot/.env.production"
+pm2 start dist/index.js --name max-bot -cwd /opt/max-comment-bot/apps/bot --node-args="--env-file=/opt/max-comment-bot/.env.production"
+```
+
+Then verify:
+
+```bash
+curl -sf "http://127.0.0.1:3001/healthz"
+curl -sf "http://127.0.0.1:3001/health/db"
+curl -sf "http://127.0.0.1:3002/healthz"
+ENV_FILE=/opt/max-comment-bot/.env.production pnpm webhook:resubscribe
+```
+
+For full production details (Nginx, DB roles, preflight modes, env sourcing): see `DEPLOYMENT.md`.
+Fast onboarding one-pager: `docs/deploy-quickstart.md`.
+Runtime env template for servers: `.env.production.example`.
+Split API/bot env examples (systemd/PM2): `docs/runtime-env-split-examples.md`.
+
 ## Functional smoke (automated)
 
 Требуется заполненный `apps/api/.env` (БД, `ADMIN_SESSION_SECRET`, seed-админ и т.д.). Скрипт сам поднимает **собранные** `dist/server.js` и `dist/index.js` и для дочернего API выставляет `NODE_ENV=development` + `DEV_MAX_AUTH_BYPASS=true` (ваш файл `.env` может оставаться с `NODE_ENV=production` — дочерний процесс всё равно получит dev-флаги для теста).
@@ -141,9 +175,12 @@ See [docs/smoke-checklist.md](docs/smoke-checklist.md) for the full manual + aut
 
 ## MVP scope notes
 
-- Flat comments only.
+- Flat comments only (no nested threads), with reply preview (`replyToCommentId` + `replyPreview`) in message bubble.
+- Per-post system thread header (`kind=thread_header`) is created idempotently on register and shown first in discussion.
 - Public feed shows only `active` comments.
+- Public feed returns thread header first, then comments in chronological order.
 - Delete is soft only (`status=deleted`).
 - Restrictions are global for MVP.
 - Moderator can hide/delete/restore comments (no text edit).
 - User can edit/delete only own comments per env config.
+- `sync-button` uses safe MAX merge flow: `GET /messages?message_ids=...` → preserve text + media attachments → replace only `inline_keyboard` and `PUT /messages`.

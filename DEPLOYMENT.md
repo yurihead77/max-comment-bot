@@ -1,5 +1,7 @@
 # Deployment Guide (MVP)
 
+Quick onboarding version: `docs/deploy-quickstart.md`.
+
 ## Target
 
 - Linux server
@@ -14,6 +16,40 @@
 - `apps/bot` on internal port `3002` (webhook + internal `sync-button`)
 - `apps/miniapp` static build behind Nginx
 - `apps/admin` static build behind Nginx
+
+## First boot checklist (external teams)
+
+Before first production start, ensure these are set in your runtime env source (systemd `EnvironmentFile`, PM2 `--env-file`, Docker `env_file`, etc.):
+
+- Core:
+  - `NODE_ENV=production`
+  - `DATABASE_URL` (existing DB, recommended app role `commentbot`)
+  - `ADMIN_SESSION_SECRET`
+- MAX bot:
+  - `MAX_BOT_TOKEN`
+  - `MAX_API_BASE_URL=https://platform-api.max.ru`
+  - `MAX_WEBAPP_URL`
+  - `MAX_OPEN_APP_ID`
+  - `MAX_WEBHOOK_SECRET` (recommended)
+  - `MAX_WEBHOOK_URL` (for webhook CLI subscribe/resubscribe)
+- Service wiring:
+  - `BOT_INTERNAL_BASE_URL` (API → bot sync route)
+  - `UPLOAD_PUBLIC_BASE_URL` (browser-visible uploads origin/prefix)
+- Frontend builds (CI or build host env):
+  - `apps/miniapp`: `VITE_API_BASE_URL`
+  - `apps/admin`: `VITE_API_BASE_URL`
+
+Recommended first-run command order:
+
+1. `pnpm install --frozen-lockfile`
+2. `pnpm db:generate`
+3. `pnpm db:preflight`
+4. `pnpm db:deploy`
+5. `pnpm db:seed`
+6. `pnpm build`
+7. start API and bot (`node dist/...` with env injected by your process manager)
+8. `ENV_FILE=/path/to/.env.production pnpm webhook:resubscribe`
+9. verify `GET /healthz`, `GET /health/db`, bot `GET /healthz`.
 
 **Mini app and admin (Vite):** set **`VITE_API_BASE_URL`** to the **browser-visible** API origin for every production build (CI/CD env or `.env.production`). If it is missing at build time, the bundle defaults to relative URLs (`""` / same origin as the static site). That only works when Nginx serves the API on the **same host and scheme** as the mini app or admin (e.g. both under `https://example.com` with `/api` proxied). Do **not** bake in `http://localhost:3001` for production: the browser would call the user’s machine, not your server, and HTTPS pages would hit mixed content.
 

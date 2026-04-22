@@ -28,6 +28,9 @@ Cross-reference: [max-integration-manual.md](max-integration-manual.md) for webh
 
 - [ ] Create a comment with text (and optional image if uploads are enabled).
 - [ ] Comment appears in the public list for other users viewing the same post (if applicable).
+- [ ] Discussion opens with system header (`thread_header`) first, then user comments.
+- [ ] Reply flow: create reply to an existing comment, quoted preview appears inside bubble, click quote scrolls/highlights target.
+- [ ] Reply safety: hidden/deleted parent comment still renders safe preview text without UI errors.
 
 ## 6. Sync button update
 

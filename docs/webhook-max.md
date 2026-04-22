@@ -138,7 +138,7 @@ curl -sS -G -X DELETE "$BASE/subscriptions" \
 | Сценарий | Типичное событие | Действие бота в MVP |
 |----------|------------------|---------------------|
 | Пользователь открыл чат с ботом / старт | `bot_started` | Только лог; пост не регистрируется. |
-| Новое сообщение в группе/канале, где бот админ | `message_created` | Извлечь `chatId` + `messageId` → **`POST /api/internal/posts/register`** → **`POST /api/internal/posts/:id/sync-button`** (через API → бот **`/internal/sync-button`** → MAX **`PUT /messages`** с `inline_keyboard` / `open_app`). |
+| Новое сообщение в группе/канале, где бот админ | `message_created` | Извлечь `chatId` + `messageId` (+ `chat.title`, текст) → **`POST /api/internal/posts/register`** (upsert поста + idempotent `thread_header`) → **`POST /api/internal/posts/:id/sync-button`** (через API → бот **`/internal/sync-button`** → MAX **`GET /messages?message_ids=...`**, merge attachments, затем **`PUT /messages`** c обновлённой `inline_keyboard` / `open_app`). |
 | Другие `update_type` | любые | **200 OK**, в логах **`unsupported_update`** с телом (не глотаем молча). |
 
 Чтобы получать события из **группы/канала**, бота нужно назначить **администратором** (см. доку MAX к объекту Update).

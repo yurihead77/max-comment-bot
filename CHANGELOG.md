@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.1 — 2026-04-22 (discussion UX + MAX sync safety)
+
+### Discussion thread UX
+
+- Added idempotent system thread header (`Comment.kind=thread_header`) created during internal post register, using post text + channel title (with fallback and truncation).
+- Added flat reply support with `replyToCommentId` and server-side `replyPreview` (`authorName`, one-line `textSnippet`, `isDeleted`, `isSystem`).
+- Mini app renders reply preview inside message bubble (Telegram-like), keeps jump-to-comment + transient highlight behavior.
+
+### Safety and moderation constraints
+
+- `replyToCommentId` validation: must exist, belong to same `postId`, and target a regular comment (not system header); invalid targets return `400`.
+- System header is protected from user/admin edit/delete/report/moderation flows.
+- Post comments counter excludes system entries (`kind=comment` only).
+
+### MAX sync-button
+
+- Fixed media-loss bug on `PUT /messages`: sync now fetches current message via `GET /messages?message_ids=...`, preserves text and media attachments, replaces only `inline_keyboard`, then sends merged payload.
+- Added merge diagnostics (attachment counts/types before/after) in sync-button logs.
+
 ## 0.2.0 — 2026-04-17 (MVP-ready / pre-release)
 
 ### MAX Bot API (platform-api)
