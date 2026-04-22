@@ -242,7 +242,7 @@ curl -sS -X POST "http://127.0.0.1:3001/api/internal/posts/<POST_ID>/sync-button
 2. Включите уровень логов, чтобы видеть **`webhook: ingress`** (там `bodyPreview` до ~16k символов).
 3. Опубликуйте тестовый пост в канале / добавьте бота в группу.
 4. Найдите в логах строку **`MAX webhook received`** — скопируйте `bodyPreview` или полный JSON из расширенного логирования.
-5. Если в логах **`message_created_skipped`** — пришлите фрагмент `messageSample` и доработайте **`extractChatIdFromMessage` / `extractMessageIdFromMessage`** в `apps/bot/src/max-webhook-payload.ts`.
+5. Если в логах **`message_created_skipped`** — используйте фрагмент `messageSample` и доработайте **`extractChatIdFromMessage` / `extractMessageIdFromMessage`** в `apps/bot/src/max-webhook-payload.ts`.
 
 ## Коды ответа webhook
 

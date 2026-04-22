@@ -1,12 +1,12 @@
-# Runtime Env Split Examples (API / Bot)
+# Примеры раздельного runtime env (API / Bot)
 
-Use this when you do **not** want one shared env file for both services.
+Используйте этот вариант, если не хотите хранить один общий env-файл для API и бота.
 
-Base reference for all variables: `.env.production.example`.
+Базовый шаблон переменных: `.env.production.example`.
 
-## Option A: systemd with separate EnvironmentFile
+## Вариант A: systemd с отдельными EnvironmentFile
 
-### `/etc/max-comment-bot/api.env` (API-only)
+### `/etc/max-comment-bot/api.env` (только API)
 
 ```bash
 NODE_ENV=production
@@ -40,7 +40,7 @@ DEV_MAX_AUTH_BYPASS=false
 BOT_MOCK_MAX_API=false
 ```
 
-### `/etc/max-comment-bot/bot.env` (Bot-only)
+### `/etc/max-comment-bot/bot.env` (только бот)
 
 ```bash
 NODE_ENV=production
@@ -60,7 +60,7 @@ BOT_MOCK_MAX_API=false
 DEV_MAX_AUTH_BYPASS=false
 ```
 
-### systemd unit snippets
+### Фрагменты systemd unit
 
 `/etc/systemd/system/max-api.service`:
 
@@ -82,9 +82,9 @@ ExecStart=/usr/bin/node dist/index.js
 Restart=always
 ```
 
-## Option B: PM2 ecosystem with split env
+## Вариант B: PM2 ecosystem с раздельными env
 
-Create `ecosystem.config.cjs`:
+Создайте `ecosystem.config.cjs`:
 
 ```js
 module.exports = {
@@ -132,14 +132,14 @@ module.exports = {
 };
 ```
 
-Start:
+Запуск:
 
 ```bash
 pm2 start ecosystem.config.cjs
 pm2 save
 ```
 
-## Final checks
+## Финальные проверки
 
 ```bash
 curl -sf "http://127.0.0.1:3001/healthz"
@@ -147,7 +147,7 @@ curl -sf "http://127.0.0.1:3001/health/db"
 curl -sf "http://127.0.0.1:3002/healthz"
 ```
 
-Then (from repo root):
+Затем (из корня репозитория):
 
 ```bash
 ENV_FILE=/etc/max-comment-bot/bot.env pnpm webhook:resubscribe

@@ -1,6 +1,9 @@
 # MAX Comment Bot MVP
 
-Monorepo skeleton for MAX post discussions:
+Приложение добавляет в каналы MAX полноценные обсуждения постов.  
+В самих каналах MAX нет встроенной ленты комментариев к публикациям, поэтому этот проект реализует такой слой: подписчики могут открывать обсуждение из кнопки под постом, оставлять комментарии, отвечать друг другу, а модераторы — управлять контентом.
+
+Состав монорепозитория:
 
 - `apps/api` — Fastify + Prisma API (public/admin/internal)
 - `apps/bot` — MAX bot integration (publish + sync inline button)
@@ -8,23 +11,23 @@ Monorepo skeleton for MAX post discussions:
 - `apps/admin` — admin panel for moderation/restrictions
 - `packages/shared` — shared types
 
-## Prerequisites
+## Требования
 
 - Node.js 20+ (uses `node --env-file` in examples)
 - pnpm 10+
 - PostgreSQL reachable from `DATABASE_URL` (quick option: **`docker compose up -d`** in repo root — see **`DEPLOYMENT.md`**)
 
-## Local setup
+## Локальный запуск
 
-1. Copy root env template and edit values:
+1. Скопируйте шаблон env из корня и заполните значения:
 
 ```bash
 cp .env.example .env
 ```
 
-For API, either keep a single `apps/api/.env` (recommended for Prisma CLI) or symlink it from the root `.env`.
+Для API можно использовать отдельный `apps/api/.env` (рекомендуется для Prisma CLI) или симлинк на корневой `.env`.
 
-2. Install and generate Prisma client:
+2. Установите зависимости и подготовьте Prisma:
 
 ```bash
 pnpm install
@@ -33,27 +36,27 @@ pnpm db:deploy
 pnpm db:seed
 ```
 
-3. **Production-style build** (bundled entrypoints; runnable with plain `node`):
+3. **Сборка как в production** (bundled entrypoints, запуск через обычный `node`):
 
 ```bash
 pnpm build
 ```
 
-4. **Run API** (from `apps/api` so `./uploads` and `.env` resolve correctly):
+4. **Запустите API** (из `apps/api`, чтобы корректно резолвились `./uploads` и `.env`):
 
 ```bash
 cd apps/api
 node --env-file=.env dist/server.js
 ```
 
-5. **Run bot** (same env file is fine; uses `BOT_PORT`, `MAX_*`, etc.):
+5. **Запустите бота** (можно использовать тот же env-файл; нужны `BOT_PORT`, `MAX_*` и т.д.):
 
 ```bash
 cd apps/bot
 node --env-file=../api/.env dist/index.js
 ```
 
-6. **Mini app / admin (Vite dev)** — `VITE_API_BASE_URL` (see `.env.example`) and dev-mock flags. For **production static builds**, set `VITE_API_BASE_URL` to the public API URL in CI, or omit it only if the API is served **same origin** as the static app (see `DEPLOYMENT.md`); do not rely on a `localhost` default in the browser.
+6. **Mini app / admin (Vite dev)** — настройте `VITE_API_BASE_URL` (см. `.env.example`) и dev-mock флаги. Для **production static builds** задавайте `VITE_API_BASE_URL` как публичный URL API в CI, либо оставляйте пустым только если API отдается в **том же origin**, что и статика (см. `DEPLOYMENT.md`). Не полагайтесь на `localhost` в браузере пользователей.
 
 ```bash
 cp apps/miniapp/.env.example apps/miniapp/.env
@@ -62,30 +65,30 @@ pnpm --filter @max-comment-bot/miniapp dev
 pnpm --filter @max-comment-bot/admin dev
 ```
 
-### Dev bypass for MAX (local only)
+### Dev bypass для MAX (только локально)
 
-In `apps/api/.env`:
+В `apps/api/.env`:
 
 - `NODE_ENV=development`
-- `DEV_MAX_AUTH_BYPASS=true` — allows `POST /api/auth/max/init` with JSON `{ "devMock": { ... } }` instead of real `initData`.
+- `DEV_MAX_AUTH_BYPASS=true` — разрешает `POST /api/auth/max/init` с JSON `{ "devMock": { ... } }` вместо реального `initData`.
 
-In `apps/miniapp/.env`:
+В `apps/miniapp/.env`:
 
-- `VITE_DEV_MAX_AUTH=true` — mini app calls dev-mock auth and can use `?postId=<uuid>` or `VITE_DEV_POST_ID`.
+- `VITE_DEV_MAX_AUTH=true` — mini app использует dev-mock auth и может открываться с `?postId=<uuid>` или `VITE_DEV_POST_ID`.
 
 **Production guard:** если в `.env` одновременно `NODE_ENV=production` и `DEV_MAX_AUTH_BYPASS=true`, процесс API **не стартует** (ошибка валидации Zod). В коде dev-mock разрешён только при `NODE_ENV === "development"`.
 
-**Never** enable `DEV_MAX_AUTH_BYPASS` in production.
+**Никогда** не включайте `DEV_MAX_AUTH_BYPASS` в production.
 
-### Bot: skip real MAX on sync (local CI only)
+### Бот: пропуск реального MAX при sync (только local/CI)
 
-In `apps/api/.env` (bot reads the same file when started with `--env-file=../api/.env`):
+В `apps/api/.env` (бот читает тот же файл при старте с `--env-file=../api/.env`):
 
-- `BOT_MOCK_MAX_API=true` — in **development**, `/internal/sync-button` on the bot returns success without calling MAX.
+- `BOT_MOCK_MAX_API=true` — в **development** `/internal/sync-button` у бота возвращает успех без вызова MAX.
 
-Set to `false` in real deployments.
+В реальном deployment значение должно быть `false`.
 
-## Turborepo shortcuts
+## Команды Turborepo
 
 ```bash
 pnpm dev          # parallel dev (tsx / vite)
@@ -93,9 +96,9 @@ pnpm run typecheck
 pnpm run build
 ```
 
-## Quick Deploy (external devs)
+## Быстрый деплой (для внешних разработчиков)
 
-Minimal server bootstrap sequence (after cloning repo to `/opt/max-comment-bot`):
+Минимальный bootstrap сервера (после клонирования в `/opt/max-comment-bot`):
 
 ```bash
 pnpm install --frozen-lockfile
@@ -106,14 +109,14 @@ pnpm db:seed
 pnpm build
 ```
 
-Run processes (example with PM2 + existing env file):
+Запуск процессов (пример с PM2 и env-файлом):
 
 ```bash
 pm2 start dist/server.js --name max-api -cwd /opt/max-comment-bot/apps/api --node-args="--env-file=/opt/max-comment-bot/.env.production"
 pm2 start dist/index.js --name max-bot -cwd /opt/max-comment-bot/apps/bot --node-args="--env-file=/opt/max-comment-bot/.env.production"
 ```
 
-Then verify:
+Проверьте сервисы:
 
 ```bash
 curl -sf "http://127.0.0.1:3001/healthz"
@@ -122,10 +125,10 @@ curl -sf "http://127.0.0.1:3002/healthz"
 ENV_FILE=/opt/max-comment-bot/.env.production pnpm webhook:resubscribe
 ```
 
-For full production details (Nginx, DB roles, preflight modes, env sourcing): see `DEPLOYMENT.md`.
-Fast onboarding one-pager: `docs/deploy-quickstart.md`.
-Runtime env template for servers: `.env.production.example`.
-Split API/bot env examples (systemd/PM2): `docs/runtime-env-split-examples.md`.
+Подробная production-документация (Nginx, роли БД, preflight, источники env): `DEPLOYMENT.md`.  
+Короткий one-pager для онбординга: `docs/deploy-quickstart.md`.  
+Шаблон runtime env для серверов: `.env.production.example`.  
+Раздельные env-примеры для API/бота (systemd/PM2): `docs/runtime-env-split-examples.md`.
 
 ## Functional smoke (automated)
 
@@ -173,14 +176,14 @@ Staging на реальном MAX: [docs/staging-checklist.md](docs/staging-chec
 
 See [docs/smoke-checklist.md](docs/smoke-checklist.md) for the full manual + automated checklist.
 
-## MVP scope notes
+## Ограничения MVP
 
-- Flat comments only (no nested threads), with reply preview (`replyToCommentId` + `replyPreview`) in message bubble.
-- Per-post system thread header (`kind=thread_header`) is created idempotently on register and shown first in discussion.
-- Public feed shows only `active` comments.
-- Public feed returns thread header first, then comments in chronological order.
-- Delete is soft only (`status=deleted`).
-- Restrictions are global for MVP.
-- Moderator can hide/delete/restore comments (no text edit).
-- User can edit/delete only own comments per env config.
-- `sync-button` uses safe MAX merge flow: `GET /messages?message_ids=...` → preserve text + media attachments → replace only `inline_keyboard` and `PUT /messages`.
+- Плоский список комментариев (без вложенных тредов), с превью ответа (`replyToCommentId` + `replyPreview`) внутри bubble.
+- Для каждого поста создаётся системный заголовок обсуждения (`kind=thread_header`) — идемпотентно, один раз на пост.
+- В публичной ленте отображаются только `active` комментарии.
+- Порядок выдачи: сначала thread header, затем комментарии по времени.
+- Удаление — мягкое (`status=deleted`).
+- Ограничения пользователей в MVP глобальные.
+- Модератор может скрывать/удалять/восстанавливать комментарии (без редактирования текста).
+- Пользователь может редактировать/удалять только свои комментарии (по env-настройкам).
+- `sync-button` использует безопасный merge в MAX: `GET /messages?message_ids=...` → сохраняем текст и media attachments → заменяем только `inline_keyboard` → `PUT /messages`.

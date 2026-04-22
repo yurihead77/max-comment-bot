@@ -1,31 +1,31 @@
-# API Documentation (MVP)
+# Документация API (MVP)
 
-## Public mini app API
+## Публичное API mini app
 
-- `POST /api/auth/max/init` — validate `initData`, upsert user/chat; **or** in `NODE_ENV=development` with `DEV_MAX_AUTH_BYPASS=true`, accept `{ "devMock": { "maxUserId", "username?", "chatMaxId?", "startParam?" } }` for local testing (never enable in production).
-- `GET /api/posts/:postId` — post meta + comments count + restriction state.
-- `GET /api/posts/:postId/comments` — returns `thread_header` first (if exists), then comments oldest first; supports `includeHidden=true` for moderators.
-- `POST /api/posts/:postId/comments` — create own comment, supports optional `replyToCommentId`.
-- `PATCH /api/comments/:commentId` — edit own comment.
-- `DELETE /api/comments/:commentId` — soft delete own comment.
-- `POST /api/uploads/comment-image` — upload image and return attachment metadata.
+- `POST /api/auth/max/init` — проверка `initData`, upsert пользователя/чата; **или** в `NODE_ENV=development` при `DEV_MAX_AUTH_BYPASS=true` принимает `{ "devMock": { "maxUserId", "username?", "chatMaxId?", "startParam?" } }` для локальной разработки (в production запрещено).
+- `GET /api/posts/:postId` — метаданные поста, счётчик комментариев, состояние ограничений.
+- `GET /api/posts/:postId/comments` — сначала `thread_header` (если есть), затем комментарии по времени; `includeHidden=true` доступен модераторам.
+- `POST /api/posts/:postId/comments` — создание собственного комментария, поддерживает optional `replyToCommentId`.
+- `PATCH /api/comments/:commentId` — редактирование своего комментария.
+- `DELETE /api/comments/:commentId` — мягкое удаление своего комментария.
+- `POST /api/uploads/comment-image` — загрузка изображения и возврат метаданных вложения.
 
-### Create comment request (`POST /api/posts/:postId/comments`)
+### Запрос создания комментария (`POST /api/posts/:postId/comments`)
 
-| Field | Type | Required | Notes |
-|------|------|----------|-------|
-| `text` | `string` | yes | Trimmed, `1..MAX_COMMENT_LENGTH`. |
-| `attachmentIds` | `string[]` | no | Defaults to `[]`, max `MAX_ATTACHMENTS_PER_COMMENT`. |
-| `replyToCommentId` | `string` | no | Must reference an existing regular comment in the same `postId`. |
+| Поле | Тип | Обязательно | Примечание |
+|------|------|-------------|------------|
+| `text` | `string` | да | После trim, `1..MAX_COMMENT_LENGTH`. |
+| `attachmentIds` | `string[]` | нет | По умолчанию `[]`, максимум `MAX_ATTACHMENTS_PER_COMMENT`. |
+| `replyToCommentId` | `string` | нет | Должен ссылаться на существующий обычный комментарий в том же `postId`. |
 
-### Comment DTO additions
+### Дополнительные поля Comment DTO
 
 - `kind`: `"comment" | "thread_header"`.
 - `systemAuthorName`: channel title-like label for `thread_header`.
 - `replyToCommentId`: nullable parent id for flat reply UX.
 - `replyPreview`: nullable object (`id`, `authorName`, `textSnippet`, `isDeleted`, `isSystem`).
 
-### List comments response shape (`GET /api/posts/:postId/comments`)
+### Формат ответа списка комментариев (`GET /api/posts/:postId/comments`)
 
 ```json
 {
@@ -61,10 +61,10 @@
 }
 ```
 
-Notes:
-- `thread_header` (if exists) is returned as the first item.
-- Public feed excludes `hidden`/`deleted`; moderators may pass `includeHidden=true`.
-- `replyPreview.textSnippet` is generated on backend (single line, collapsed spaces, truncated).
+Примечания:
+- `thread_header` (если есть) всегда возвращается первым элементом.
+- Публичная лента исключает `hidden`/`deleted`; модераторы могут передавать `includeHidden=true`.
+- `replyPreview.textSnippet` формируется на backend (одна строка, схлопнутые пробелы, обрезка по длине).
 
 ## Admin API
 
@@ -80,25 +80,25 @@ Notes:
 - `POST /api/admin/restrictions/:restrictionId/revoke`
 - `GET /api/admin/moderation-actions`
 
-## Internal API
+## Внутреннее API
 
 - `POST /api/internal/posts/register`
 - `POST /api/internal/posts/:postId/sync-button`
 - `POST /api/internal/posts/:postId/resync`
 
-## Behavior constraints
+## Поведенческие ограничения
 
-- Counter uses only `active` comments with `kind=comment` (system header is excluded).
-- `hidden` and `deleted` are excluded from public feed and counter.
-- All deletes are soft deletes.
-- Global restrictions block comment creation.
-- `replyToCommentId` must point to an existing regular comment in the same `postId`; cross-post or system targets return `400`.
+- Счётчик использует только `active` комментарии с `kind=comment` (системный header исключается).
+- `hidden` и `deleted` исключаются из публичной ленты и счётчика.
+- Все удаления — мягкие (soft delete).
+- Глобальные ограничения блокируют создание комментариев.
+- `replyToCommentId` должен ссылаться на существующий обычный комментарий в том же `postId`; reply на чужой пост или системную запись возвращает `400`.
 
-### Internal register + sync behavior (important for MAX media safety)
+### Поведение internal register + sync (важно для сохранения media в MAX)
 
-- `POST /api/internal/posts/register` upserts post binding and maintains one system `thread_header` per post.
-- `POST /api/internal/posts/:postId/sync-button` triggers bot sync that preserves media attachments on MAX:
+- `POST /api/internal/posts/register` делает upsert связки поста и поддерживает один системный `thread_header` на пост.
+- `POST /api/internal/posts/:postId/sync-button` запускает sync бота, который сохраняет media attachments в MAX:
   - `GET /messages?message_ids=...`
-  - remove old `inline_keyboard` attachment
-  - merge original attachments + new keyboard
-  - `PUT /messages` with merged payload.
+  - удаление старого `inline_keyboard`
+  - merge исходных attachments + новой клавиатуры
+  - `PUT /messages` с объединённым payload.
