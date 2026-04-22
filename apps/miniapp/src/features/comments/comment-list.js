@@ -105,7 +105,7 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
                             prev.authorId &&
                             comment.authorId &&
                             prev.authorId === comment.authorId);
-                        const showAvatar = !grouped;
+                        const showAvatar = (comment.kind ?? "comment") === "comment";
                         const reactionState = reactions[comment.id];
                         const badge = reportBadge && reportBadge.commentId === comment.id
                             ? {

@@ -180,6 +180,7 @@ body {
   border-radius: 14px;
   padding: 7px 10px 8px;
   min-width: 0;
+  max-width: 100%;
   box-shadow: none;
 }
 
@@ -188,6 +189,7 @@ body {
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
+  max-width: 100%;
 }
 
 .chat-bubble__reply-quote {
@@ -195,6 +197,8 @@ body {
   flex-direction: column;
   gap: 2px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 2px 0 6px;
   padding: 6px 8px;
   border: 1px solid rgba(129, 140, 248, 0.35);
@@ -213,6 +217,9 @@ body {
 }
 
 .chat-bubble__reply-text {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   font-size: 0.78rem;
   line-height: 1.35;
   color: var(--max-chat-muted);

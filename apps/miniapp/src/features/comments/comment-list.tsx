@@ -167,7 +167,7 @@ export function CommentList({
                   comment.authorId &&
                   prev.authorId === comment.authorId
               );
-              const showAvatar = !grouped;
+              const showAvatar = (comment.kind ?? "comment") === "comment";
               const reactionState = reactions[comment.id];
               const badge =
                 reportBadge && reportBadge.commentId === comment.id
