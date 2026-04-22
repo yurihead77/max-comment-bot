@@ -17,6 +17,13 @@ function buildAdminUrl(): string | undefined {
   return `${base}/`;
 }
 
+const COMMENT_PREVIEW_MAX = 300;
+
+/** Remove simple HTML tags from comment text for plain moderator notifications. */
+function stripHtmlTags(input: string): string {
+  return input.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+}
+
 export async function sendModerationChatReportNotification(
   app: FastifyInstance,
   args: {
@@ -39,21 +46,27 @@ export async function sendModerationChatReportNotification(
 
   const discussUrl = buildDiscussionUrl(args.postId, args.commentId);
   const adminUrl = buildAdminUrl();
-  const channelLine = args.channelTitle
-    ? `Канал: ${args.channelTitle} (${args.channelMaxChatId})`
-    : `Канал: ${args.channelMaxChatId}`;
-  const lines = [
-    "Жалоба на комментарий",
-    channelLine,
-    `Пост (MAX message id): ${args.postMaxMessageId}`,
-    `Автор: ${args.authorDisplay} (MAX user id: ${args.authorMaxUserId})`,
-    `Текст: ${args.commentPreview.slice(0, 500)}${args.commentPreview.length > 500 ? "…" : ""}`,
-    `Открытых жалоб: ${args.openReportsCount}`,
-    discussUrl ? `Открыть обсуждение: ${discussUrl}` : undefined,
-    adminUrl ? `Admin: ${adminUrl}` : undefined
-  ].filter(Boolean) as string[];
+  const plainComment = stripHtmlTags(args.commentPreview);
+  const truncated =
+    plainComment.length > COMMENT_PREVIEW_MAX ? `${plainComment.slice(0, COMMENT_PREVIEW_MAX)}…` : plainComment;
+  const quoted = `"${truncated.replace(/"/g, "'")}"`;
 
-  const text = lines.join("\n");
+  const parts = [
+    "⚠️ Жалоба на комментарий",
+    "",
+    quoted,
+    "",
+    `Автор: ${args.authorDisplay}`,
+    `Пост: ${args.postMaxMessageId}`,
+    `Открытых жалоб: ${args.openReportsCount}`
+  ];
+  if (discussUrl) {
+    parts.push("", `Открыть обсуждение: ${discussUrl}`);
+  }
+  if (adminUrl) {
+    parts.push("", `Admin: ${adminUrl}`);
+  }
+  const text = parts.join("\n");
   const botUrl = `${env.BOT_INTERNAL_BASE_URL.replace(/\/$/, "")}/internal/send-plain-message`;
   try {
     const res = await fetch(botUrl, {
