@@ -210,17 +210,6 @@ export function CommentItem({
           ) : null}
         </div>
         <div className="chat-message-stack">
-          {comment.replyPreview ? (
-            <button
-              type="button"
-              className="comment-reply-quote"
-              onClick={() => onJumpToComment?.(comment.replyPreview!.id)}
-              aria-label={`Перейти к комментарию ${comment.replyPreview.authorName}`}
-            >
-              <span className="comment-reply-quote__author">{comment.replyPreview.authorName}</span>
-              <span className="comment-reply-quote__text">{comment.replyPreview.textSnippet}</span>
-            </button>
-          ) : null}
           {reportBadge ? (
             <div className="chat-report-badge" aria-label="Жалоба">
               <span className="chat-report-badge__label">Жалоба</span>
@@ -238,6 +227,8 @@ export function CommentItem({
             text={comment.text}
             createdAt={comment.createdAt}
             isEdited={comment.isEdited}
+            replyPreview={comment.replyPreview ?? null}
+            onReplyPreviewClick={(id) => onJumpToComment?.(id)}
             showMenu={!isThreadHeader}
             onOpenMenuAt={openAt}
             onClick={onBubbleClick}

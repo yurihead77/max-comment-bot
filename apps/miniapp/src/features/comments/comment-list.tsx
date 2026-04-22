@@ -159,7 +159,14 @@ export function CommentList({
             comments={comments}
             renderMessage={(comment, index) => {
               const prev = comments[index - 1];
-              const grouped = Boolean(prev && prev.authorId === comment.authorId);
+              const grouped = Boolean(
+                prev &&
+                  (prev.kind ?? "comment") === "comment" &&
+                  (comment.kind ?? "comment") === "comment" &&
+                  prev.authorId &&
+                  comment.authorId &&
+                  prev.authorId === comment.authorId
+              );
               const showAvatar = !grouped;
               const reactionState = reactions[comment.id];
               const badge =

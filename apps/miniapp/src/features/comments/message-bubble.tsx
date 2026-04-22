@@ -6,6 +6,12 @@ interface MessageBubbleProps {
   text: string;
   createdAt: string;
   isEdited: boolean;
+  replyPreview?: {
+    id: string;
+    authorName: string;
+    textSnippet: string;
+  } | null;
+  onReplyPreviewClick?: (commentId: string) => void;
   showMenu?: boolean;
   onOpenMenuAt: (x: number, y: number) => void;
   onClick: (e: React.MouseEvent) => void;
@@ -23,6 +29,8 @@ export function MessageBubble({
   text,
   createdAt,
   isEdited,
+  replyPreview,
+  onReplyPreviewClick,
   showMenu = true,
   onOpenMenuAt,
   onClick,
@@ -60,6 +68,20 @@ export function MessageBubble({
         </button>
       ) : null}
       <MessageMeta name={name} createdAt={createdAt} isEdited={isEdited} />
+      {replyPreview ? (
+        <button
+          type="button"
+          className="chat-bubble__reply-quote"
+          onClick={(e) => {
+            e.stopPropagation();
+            onReplyPreviewClick?.(replyPreview.id);
+          }}
+          aria-label={`Перейти к комментарию ${replyPreview.authorName}`}
+        >
+          <span className="chat-bubble__reply-author">{replyPreview.authorName}</span>
+          <span className="chat-bubble__reply-text">{replyPreview.textSnippet}</span>
+        </button>
+      ) : null}
       <p className="chat-bubble__text">{text}</p>
     </div>
   );

@@ -99,7 +99,12 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
     }, [menu?.comment?.id, canModerate, currentUserId]);
     return (_jsxs(_Fragment, { children: [_jsx("div", { className: "comments-app__scroll", ref: scrollRef, children: empty ? (_jsxs("div", { className: "chat-empty", "aria-live": "polite", children: [_jsx("p", { className: "chat-empty__title", children: COMMENT_EMPTY_TITLE }), _jsx("p", { className: "chat-empty__subtitle", children: COMMENT_EMPTY_SUBTITLE })] })) : (_jsx(MessageList, { comments: comments, renderMessage: (comment, index) => {
                         const prev = comments[index - 1];
-                        const grouped = Boolean(prev && prev.authorId === comment.authorId);
+                        const grouped = Boolean(prev &&
+                            (prev.kind ?? "comment") === "comment" &&
+                            (comment.kind ?? "comment") === "comment" &&
+                            prev.authorId &&
+                            comment.authorId &&
+                            prev.authorId === comment.authorId);
                         const showAvatar = !grouped;
                         const reactionState = reactions[comment.id];
                         const badge = reportBadge && reportBadge.commentId === comment.id

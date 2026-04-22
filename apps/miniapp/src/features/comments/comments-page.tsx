@@ -75,6 +75,18 @@ export function CommentsPage() {
 
   async function reloadComments(currentPostId: string, includeHidden?: boolean) {
     const response = await getComments(currentPostId, includeHidden ? { includeHidden: true } : undefined);
+    const toAuthor = (v: unknown): CommentItemModel["author"] => {
+      if (!v || typeof v !== "object") return null;
+      const a = v as Record<string, unknown>;
+      return {
+        id: String(a.id ?? ""),
+        maxUserId: String(a.maxUserId ?? ""),
+        username: typeof a.username === "string" ? a.username : null,
+        firstName: typeof a.firstName === "string" ? a.firstName : null,
+        lastName: typeof a.lastName === "string" ? a.lastName : null,
+        photoUrl: typeof a.photoUrl === "string" ? a.photoUrl : null
+      };
+    };
     const mapped: CommentItemModel[] = response.items.map((c: Record<string, unknown>) => ({
       id: c.id as string,
       text: c.text as string,
@@ -94,7 +106,7 @@ export function CommentsPage() {
               isSystem: Boolean((c.replyPreview as Record<string, unknown>).isSystem)
             }
           : null,
-      author: (c.author as CommentItemModel["author"]) ?? null
+      author: toAuthor(c.author)
     }));
     setComments(mapped);
   }

@@ -53,6 +53,19 @@ export function CommentsPage() {
     }
     async function reloadComments(currentPostId, includeHidden) {
         const response = await getComments(currentPostId, includeHidden ? { includeHidden: true } : undefined);
+        const toAuthor = (v) => {
+            if (!v || typeof v !== "object")
+                return null;
+            const a = v;
+            return {
+                id: String(a.id ?? ""),
+                maxUserId: String(a.maxUserId ?? ""),
+                username: typeof a.username === "string" ? a.username : null,
+                firstName: typeof a.firstName === "string" ? a.firstName : null,
+                lastName: typeof a.lastName === "string" ? a.lastName : null,
+                photoUrl: typeof a.photoUrl === "string" ? a.photoUrl : null
+            };
+        };
         const mapped = response.items.map((c) => ({
             id: c.id,
             text: c.text,
@@ -71,7 +84,7 @@ export function CommentsPage() {
                     isSystem: Boolean(c.replyPreview.isSystem)
                 }
                 : null,
-            author: c.author ?? null
+            author: toAuthor(c.author)
         }));
         setComments(mapped);
     }
