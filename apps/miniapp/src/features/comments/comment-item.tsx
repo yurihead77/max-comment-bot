@@ -22,6 +22,14 @@ export interface CommentItemModel {
   isEdited: boolean;
   kind?: "comment" | "thread_header";
   systemAuthorName?: string | null;
+  replyToCommentId?: string | null;
+  replyPreview?: {
+    id: string;
+    authorName: string;
+    textSnippet: string;
+    isDeleted: boolean;
+    isSystem: boolean;
+  } | null;
   author?: CommentAuthorModel | null;
 }
 
@@ -62,6 +70,7 @@ export interface CommentItemProps {
   onOpenMenu: (comment: CommentItemModel, anchor: { x: number; y: number }) => void;
   reactionState?: ReactionState;
   onToggleReaction: (emoji: string) => void;
+  onJumpToComment?: (commentId: string) => void;
 }
 
 export function CommentItem({
@@ -74,7 +83,8 @@ export function CommentItem({
   reportBadge,
   onOpenMenu,
   reactionState,
-  onToggleReaction
+  onToggleReaction,
+  onJumpToComment
 }: CommentItemProps) {
   const kind = comment.kind ?? "comment";
   const isThreadHeader = kind === "thread_header";
@@ -181,6 +191,7 @@ export function CommentItem({
   return (
     <div
       className={rowClass}
+      id={`comment-${comment.id}`}
       data-comment-id={comment.id}
       data-author-id={comment.authorId}
       data-user-id={comment.authorId}
@@ -199,6 +210,17 @@ export function CommentItem({
           ) : null}
         </div>
         <div className="chat-message-stack">
+          {comment.replyPreview ? (
+            <button
+              type="button"
+              className="comment-reply-quote"
+              onClick={() => onJumpToComment?.(comment.replyPreview!.id)}
+              aria-label={`Перейти к комментарию ${comment.replyPreview.authorName}`}
+            >
+              <span className="comment-reply-quote__author">{comment.replyPreview.authorName}</span>
+              <span className="comment-reply-quote__text">{comment.replyPreview.textSnippet}</span>
+            </button>
+          ) : null}
           {reportBadge ? (
             <div className="chat-report-badge" aria-label="Жалоба">
               <span className="chat-report-badge__label">Жалоба</span>

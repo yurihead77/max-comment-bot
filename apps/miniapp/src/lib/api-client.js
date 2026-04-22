@@ -55,14 +55,14 @@ export async function resolveModerationReportKeep(reportId, userId) {
     }
     return response.json();
 }
-export async function createComment(postId, userId, text, attachmentIds = []) {
+export async function createComment(postId, userId, text, attachmentIds = [], replyToCommentId) {
     const response = await fetch(`${API_BASE}/posts/${postId}/comments`, {
         method: "POST",
         headers: {
             "content-type": "application/json",
             "x-user-id": userId
         },
-        body: JSON.stringify({ text, attachmentIds })
+        body: JSON.stringify({ text, attachmentIds, replyToCommentId: replyToCommentId ?? undefined })
     });
     if (!response.ok) {
         throw new Error("failed to create comment");

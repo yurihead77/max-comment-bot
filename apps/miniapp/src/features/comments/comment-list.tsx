@@ -47,7 +47,9 @@ export function CommentList({
   onReport
 }: CommentListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const flashTimerRef = useRef<number | null>(null);
   const [menu, setMenu] = useState<{ comment: CommentItemModel; x: number; y: number } | null>(null);
+  const [jumpHighlightId, setJumpHighlightId] = useState<string | null>(null);
   const [targetModerationState, setTargetModerationState] = useState<{
     isSelf: boolean;
     isTargetModerator: boolean;
@@ -71,6 +73,28 @@ export function CommentList({
       row.scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, [highlightCommentId, comments]);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current !== null) {
+        window.clearTimeout(flashTimerRef.current);
+      }
+    };
+  }, []);
+
+  const jumpToComment = (targetCommentId: string) => {
+    const row = scrollRef.current?.querySelector(`[data-comment-id="${targetCommentId}"]`) as HTMLElement | null;
+    if (!row) return;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+    setJumpHighlightId(targetCommentId);
+    if (flashTimerRef.current !== null) {
+      window.clearTimeout(flashTimerRef.current);
+    }
+    flashTimerRef.current = window.setTimeout(() => {
+      setJumpHighlightId((prev) => (prev === targetCommentId ? null : prev));
+      flashTimerRef.current = null;
+    }, 1400);
+  };
 
   const toggleReaction = (commentId: string, emoji: string) => {
     setReactions((prev) => {
@@ -145,7 +169,7 @@ export function CommentList({
                       linkedReportClosed: reportBadge.linkedReportClosed
                     }
                   : undefined;
-              const rowHighlight = highlightCommentId === comment.id;
+              const rowHighlight = highlightCommentId === comment.id || jumpHighlightId === comment.id;
               const showDiscussionStartDivider =
                 (comment.kind ?? "comment") === "thread_header" &&
                 index + 1 < comments.length &&
@@ -163,6 +187,7 @@ export function CommentList({
                     onOpenMenu={(c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y })}
                     reactionState={reactionState}
                     onToggleReaction={(emoji) => toggleReaction(comment.id, emoji)}
+                    onJumpToComment={jumpToComment}
                   />
                   {showDiscussionStartDivider ? (
                     <div className="thread-start-divider" role="separator" aria-label="Начало обсуждения">

@@ -103,14 +103,20 @@ export async function resolveModerationReportKeep(reportId: string, userId: stri
   return response.json() as Promise<{ ok: boolean; closedReports: number }>;
 }
 
-export async function createComment(postId: string, userId: string, text: string, attachmentIds: string[] = []) {
+export async function createComment(
+  postId: string,
+  userId: string,
+  text: string,
+  attachmentIds: string[] = [],
+  replyToCommentId?: string
+) {
   const response = await fetch(`${API_BASE}/posts/${postId}/comments`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-user-id": userId
     },
-    body: JSON.stringify({ text, attachmentIds })
+    body: JSON.stringify({ text, attachmentIds, replyToCommentId: replyToCommentId ?? undefined })
   });
   if (!response.ok) {
     throw new Error("failed to create comment");

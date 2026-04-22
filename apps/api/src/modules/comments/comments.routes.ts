@@ -9,7 +9,8 @@ import { sendModerationChatReportNotification } from "./comment-report-notify";
 
 const createBodySchema = z.object({
   text: z.string().trim().min(1).max(env.MAX_COMMENT_LENGTH),
-  attachmentIds: z.array(z.string()).max(env.MAX_ATTACHMENTS_PER_COMMENT).default([])
+  attachmentIds: z.array(z.string()).max(env.MAX_ATTACHMENTS_PER_COMMENT).default([]),
+  replyToCommentId: z.string().min(1).optional()
 });
 
 const updateBodySchema = z.object({
@@ -26,6 +27,32 @@ function getUserId(request: any) {
 
 function isRegularComment(kind: string): boolean {
   return kind === "comment";
+}
+
+const REPLY_SNIPPET_MAX = 110;
+const REPLY_FALLBACK_EMPTY = "Без текста";
+const REPLY_FALLBACK_DELETED = "Сообщение удалено";
+const REPLY_FALLBACK_HIDDEN = "Комментарий скрыт";
+
+function displayNameForReply(author: {
+  firstName?: string | null;
+  lastName?: string | null;
+  username?: string | null;
+} | null | undefined): string {
+  if (!author) return "Пользователь";
+  const full = [author.firstName, author.lastName].filter(Boolean).join(" ").trim();
+  if (full) return full;
+  if (author.username && author.username.trim()) {
+    return author.username.startsWith("@") ? author.username : `@${author.username}`;
+  }
+  return "Пользователь";
+}
+
+function snippetText(text: string | null | undefined): string {
+  const normalized = (text ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) return REPLY_FALLBACK_EMPTY;
+  if (normalized.length <= REPLY_SNIPPET_MAX) return normalized;
+  return `${normalized.slice(0, REPLY_SNIPPET_MAX - 1).trimEnd()}…`;
 }
 
 export const commentsRoutes: FastifyPluginAsync = async (app) => {
@@ -49,13 +76,39 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
           }
         : {}),
       take: limit,
-      include: { author: true, attachments: true }
+      include: {
+        author: true,
+        attachments: true,
+        replyToComment: {
+          include: {
+            author: true
+          }
+        }
+      }
     });
 
     return {
       items: comments.map((comment) => ({
         ...comment,
-        systemAuthorName: comment.kind === "thread_header" ? comment.systemAuthor ?? null : null
+        systemAuthorName: comment.kind === "thread_header" ? comment.systemAuthor ?? null : null,
+        replyPreview:
+          comment.replyToCommentId && comment.replyToComment
+            ? {
+                id: comment.replyToComment.id,
+                authorName:
+                  comment.replyToComment.kind === "thread_header"
+                    ? comment.replyToComment.systemAuthor ?? "Канал"
+                    : displayNameForReply(comment.replyToComment.author),
+                textSnippet:
+                  comment.replyToComment.status === "deleted"
+                    ? REPLY_FALLBACK_DELETED
+                    : comment.replyToComment.status === "hidden"
+                      ? REPLY_FALLBACK_HIDDEN
+                      : snippetText(comment.replyToComment.text),
+                isDeleted: comment.replyToComment.status === "deleted",
+                isSystem: comment.replyToComment.kind !== "comment"
+              }
+            : null
       }))
     };
   });
@@ -93,11 +146,32 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(429).send({ error: msg });
     }
 
+    let replyToCommentId: string | null = null;
+    let replyParentValid = false;
+    if (parsed.data.replyToCommentId) {
+      const parent = await app.prisma.comment.findUnique({
+        where: { id: parsed.data.replyToCommentId },
+        select: { id: true, postId: true, status: true, kind: true }
+      });
+      if (!parent) {
+        return reply.code(400).send({ error: "reply target not found" });
+      }
+      if (parent.postId !== postId) {
+        return reply.code(400).send({ error: "reply target belongs to another post" });
+      }
+      if (!isRegularComment(parent.kind)) {
+        return reply.code(400).send({ error: "reply target must be a regular comment" });
+      }
+      replyToCommentId = parent.id;
+      replyParentValid = true;
+    }
+
     const comment = await app.prisma.comment.create({
       data: {
         postId,
         authorId: userId,
         kind: "comment",
+        replyToCommentId,
         text: parsed.data.text,
         status: "active"
       }
@@ -111,6 +185,16 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     await syncPostCommentsCount(app, postId);
+    request.log.info(
+      {
+        route: "/api/posts/:postId/comments",
+        postId,
+        newCommentId: comment.id,
+        replyToCommentId,
+        replyParentValid
+      },
+      "comment created"
+    );
     return reply.code(201).send(comment);
   });
 

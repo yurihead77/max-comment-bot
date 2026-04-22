@@ -83,6 +83,17 @@ export function CommentsPage() {
       isEdited: Boolean(c.isEdited),
       kind: ((c.kind as string | undefined) ?? "comment") as "comment" | "thread_header",
       systemAuthorName: (c.systemAuthorName as string | null | undefined) ?? null,
+      replyToCommentId: (c.replyToCommentId as string | null | undefined) ?? null,
+      replyPreview:
+        c.replyPreview && typeof c.replyPreview === "object"
+          ? {
+              id: String((c.replyPreview as Record<string, unknown>).id ?? ""),
+              authorName: String((c.replyPreview as Record<string, unknown>).authorName ?? "Пользователь"),
+              textSnippet: String((c.replyPreview as Record<string, unknown>).textSnippet ?? ""),
+              isDeleted: Boolean((c.replyPreview as Record<string, unknown>).isDeleted),
+              isSystem: Boolean((c.replyPreview as Record<string, unknown>).isSystem)
+            }
+          : null,
       author: (c.author as CommentItemModel["author"]) ?? null
     }));
     setComments(mapped);
@@ -328,7 +339,7 @@ export function CommentsPage() {
               await updateOwnComment(editingMessage.id, userId, text);
               setEditingMessage(null);
             } else {
-              await createComment(postId, userId, text, attachmentIds);
+              await createComment(postId, userId, text, attachmentIds, replyToMessage?.id ?? undefined);
               setReplyToMessage(null);
             }
             await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));

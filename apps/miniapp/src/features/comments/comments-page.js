@@ -61,6 +61,16 @@ export function CommentsPage() {
             isEdited: Boolean(c.isEdited),
             kind: (c.kind ?? "comment"),
             systemAuthorName: c.systemAuthorName ?? null,
+            replyToCommentId: c.replyToCommentId ?? null,
+            replyPreview: c.replyPreview && typeof c.replyPreview === "object"
+                ? {
+                    id: String(c.replyPreview.id ?? ""),
+                    authorName: String(c.replyPreview.authorName ?? "Пользователь"),
+                    textSnippet: String(c.replyPreview.textSnippet ?? ""),
+                    isDeleted: Boolean(c.replyPreview.isDeleted),
+                    isSystem: Boolean(c.replyPreview.isSystem)
+                }
+                : null,
             author: c.author ?? null
         }));
         setComments(mapped);
@@ -238,7 +248,7 @@ export function CommentsPage() {
                         setEditingMessage(null);
                     }
                     else {
-                        await createComment(postId, userId, text, attachmentIds);
+                        await createComment(postId, userId, text, attachmentIds, replyToMessage?.id ?? undefined);
                         setReplyToMessage(null);
                     }
                     await reloadComments(postId, role === "moderator" && Boolean(reportDeepLink));

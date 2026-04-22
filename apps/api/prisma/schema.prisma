@@ -114,6 +114,7 @@ model Comment {
   kind            CommentKind   @default(comment)
   threadHeaderKey String?       @unique @map("thread_header_key")
   systemAuthor    String?       @map("system_author")
+  replyToCommentId String?      @map("reply_to_comment_id")
   parentCommentId String?       @map("parent_comment_id")
   text            String
   status          CommentStatus @default(active)
@@ -126,11 +127,14 @@ model Comment {
 
   post        Post                 @relation(fields: [postId], references: [id], onDelete: Restrict)
   author      User                 @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  replyToComment Comment?          @relation("CommentReplies", fields: [replyToCommentId], references: [id], onDelete: SetNull)
+  replies     Comment[]            @relation("CommentReplies")
   attachments CommentAttachment[]
   editHistory CommentEditHistory[]
   reports     CommentReport[]
 
   @@index([postId, kind, status, createdAt])
+  @@index([replyToCommentId])
   @@map("comments")
 }
 

@@ -50,6 +50,12 @@ node scripts/verify-upload-public-url.mjs
 - Public feed: only `active` comments, oldest → newest.
 - Create / edit / delete own comment per env limits.
 - Restriction banner for muted/blocked users; list still readable unless you change policy later.
+- Reply UX (flat list):
+  - Create comment A, then reply comment B to A via `Ответить`; B shows compact quote (`authorName` + one-line `textSnippet`).
+  - Click quote in B: list scrolls to A and briefly highlights A.
+  - Delete A (or hide via moderator): B still renders reply quote with safe fallback (`Сообщение удалено` / `Комментарий скрыт`), no crash.
+  - Try reply to a comment from another `postId` via API payload: backend returns `400`.
+  - Try reply to `thread_header` via API payload: backend returns `400` (reply target must be regular comment).
 
 ## Manual — admin
 

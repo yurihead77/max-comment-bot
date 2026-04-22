@@ -190,6 +190,37 @@ body {
   min-width: 0;
 }
 
+.comment-reply-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  border-left: 3px solid rgba(129, 140, 248, 0.8);
+  border-radius: 8px;
+  background: rgba(129, 140, 248, 0.12);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.comment-reply-quote__author {
+  font-size: 0.77rem;
+  font-weight: 600;
+  color: #c7d2fe;
+}
+
+.comment-reply-quote__text {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--max-chat-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .chat-row--own .chat-message-stack {
   align-items: flex-end;
 }
