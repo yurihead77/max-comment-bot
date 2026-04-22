@@ -146,20 +146,32 @@ export function CommentList({
                     }
                   : undefined;
               const rowHighlight = highlightCommentId === comment.id;
+              const showDiscussionStartDivider =
+                (comment.kind ?? "comment") === "thread_header" &&
+                index + 1 < comments.length &&
+                (comments[index + 1]?.kind ?? "comment") !== "thread_header";
               return (
-                <CommentItem
-                  key={comment.id}
-                  comment={comment}
-                  currentUserId={currentUserId}
-                  selfDisplayHint={selfDisplayHint}
-                  showAvatar={showAvatar}
-                  groupedWithPrevious={grouped}
-                  reportHighlight={rowHighlight}
-                  reportBadge={badge}
-                  onOpenMenu={(c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y })}
-                  reactionState={reactionState}
-                  onToggleReaction={(emoji) => toggleReaction(comment.id, emoji)}
-                />
+                <div key={comment.id}>
+                  <CommentItem
+                    comment={comment}
+                    currentUserId={currentUserId}
+                    selfDisplayHint={selfDisplayHint}
+                    showAvatar={showAvatar}
+                    groupedWithPrevious={grouped}
+                    reportHighlight={rowHighlight}
+                    reportBadge={badge}
+                    onOpenMenu={(c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y })}
+                    reactionState={reactionState}
+                    onToggleReaction={(emoji) => toggleReaction(comment.id, emoji)}
+                  />
+                  {showDiscussionStartDivider ? (
+                    <div className="thread-start-divider" role="separator" aria-label="Начало обсуждения">
+                      <span className="thread-start-divider__line" />
+                      <span className="thread-start-divider__label">Начало обсуждения</span>
+                      <span className="thread-start-divider__line" />
+                    </div>
+                  ) : null}
+                </div>
               );
             }}
           />

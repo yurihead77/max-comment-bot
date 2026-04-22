@@ -24,6 +24,10 @@ function getUserId(request: any) {
   return request.headers["x-user-id"] as string | undefined;
 }
 
+function isRegularComment(kind: string): boolean {
+  return kind === "comment";
+}
+
 export const commentsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/api/posts/:postId/comments", async (request, reply) => {
     const { postId } = request.params as { postId: string };
@@ -37,7 +41,7 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
         postId,
         status: includeHidden ? { in: ["active", "hidden"] } : "active"
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ kind: "desc" }, { createdAt: "asc" }],
       ...(query.cursor
         ? {
             cursor: { id: query.cursor },
@@ -48,7 +52,12 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
       include: { author: true, attachments: true }
     });
 
-    return { items: comments };
+    return {
+      items: comments.map((comment) => ({
+        ...comment,
+        systemAuthorName: comment.kind === "thread_header" ? comment.systemAuthor ?? null : null
+      }))
+    };
   });
 
   app.post("/api/posts/:postId/comments", async (request, reply) => {
@@ -88,6 +97,7 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
       data: {
         postId,
         authorId: userId,
+        kind: "comment",
         text: parsed.data.text,
         status: "active"
       }
@@ -118,6 +128,9 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
     const comment = await app.prisma.comment.findUnique({ where: { id: commentId } });
     if (!comment || comment.status === "deleted") {
       return reply.code(404).send({ error: "comment not found" });
+    }
+    if (!isRegularComment(comment.kind)) {
+      return reply.code(403).send({ error: "system comments are read-only" });
     }
     if (comment.authorId !== userId) {
       return reply.code(403).send({ error: "can edit only own comments" });
@@ -165,6 +178,9 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
     if (!comment || comment.status === "deleted") {
       return reply.code(404).send({ error: "comment not found" });
     }
+    if (!isRegularComment(comment.kind)) {
+      return reply.code(403).send({ error: "system comments cannot be deleted" });
+    }
     if (comment.authorId !== userId) {
       return reply.code(403).send({ error: "can delete only own comments" });
     }
@@ -202,6 +218,9 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!comment || comment.status === "deleted") {
       return reply.code(404).send({ error: "comment not found" });
+    }
+    if (!isRegularComment(comment.kind)) {
+      return reply.code(403).send({ error: "system comments cannot be reported" });
     }
 
     const existing = await app.prisma.commentReport.findUnique({

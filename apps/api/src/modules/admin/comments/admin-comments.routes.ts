@@ -161,6 +161,9 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
     if (!existing) {
       return reply.code(404).send({ error: "not found" });
     }
+    if (existing.kind !== "comment") {
+      return reply.code(403).send({ error: "system comments cannot be moderated" });
+    }
     const policy = await ensureCanModerateTargetUser(request, reply, existing.authorId);
     if (!policy.ok) {
       return;
@@ -217,6 +220,9 @@ export const adminCommentsRoutes: FastifyPluginAsync = async (app) => {
     const existing = await app.prisma.comment.findUnique({ where: { id: commentId } });
     if (!existing) {
       return reply.code(404).send({ error: "not found" });
+    }
+    if (existing.kind !== "comment") {
+      return reply.code(403).send({ error: "system comments cannot be moderated" });
     }
     const policy = await ensureCanModerateTargetUser(request, reply, existing.authorId);
     if (!policy.ok) {

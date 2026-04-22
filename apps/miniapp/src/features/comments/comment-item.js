@@ -30,8 +30,12 @@ function initials(name) {
     return w.slice(0, 2).toUpperCase();
 }
 export function CommentItem({ comment, currentUserId, selfDisplayHint, showAvatar, groupedWithPrevious, reportHighlight, reportBadge, onOpenMenu, reactionState, onToggleReaction }) {
+    const kind = comment.kind ?? "comment";
+    const isThreadHeader = kind === "thread_header";
     const own = comment.authorId === currentUserId;
-    const name = resolveDisplayName(comment, currentUserId, selfDisplayHint);
+    const name = isThreadHeader
+        ? comment.systemAuthorName?.trim() || "Канал"
+        : resolveDisplayName(comment, currentUserId, selfDisplayHint);
     const longPressTimer = useRef(undefined);
     const longPressListeners = useRef(null);
     const longPressAnchor = useRef(null);
@@ -53,10 +57,14 @@ export function CommentItem({ comment, currentUserId, selfDisplayHint, showAvata
         onOpenMenu(comment, { x: clientX, y: clientY });
     };
     const onContextMenu = (e) => {
+        if (isThreadHeader)
+            return;
         e.preventDefault();
         openAt(e.clientX, e.clientY);
     };
     const onBubbleClick = (e) => {
+        if (isThreadHeader)
+            return;
         if (e.target.closest(".chat-bubble__menu-hit"))
             return;
         const sel = typeof window !== "undefined" ? window.getSelection?.()?.toString() ?? "" : "";
@@ -65,6 +73,8 @@ export function CommentItem({ comment, currentUserId, selfDisplayHint, showAvata
         openAt(e.clientX, e.clientY);
     };
     const onPointerDown = (e) => {
+        if (isThreadHeader)
+            return;
         if (e.button !== 0)
             return;
         if (e.target.closest(".chat-bubble__menu-hit"))
@@ -109,8 +119,9 @@ export function CommentItem({ comment, currentUserId, selfDisplayHint, showAvata
         clearLongPress();
     };
     const rowClass = "chat-row" +
+        (isThreadHeader ? " chat-row--thread-header" : "") +
         (own ? " chat-row--own" : "") +
         (groupedWithPrevious ? " chat-row--grouped" : "") +
         (reportHighlight ? " chat-row--report-target" : "");
-    return (_jsx("div", { className: rowClass, "data-comment-id": comment.id, "data-author-id": comment.authorId, "data-user-id": comment.authorId, role: "listitem", children: _jsxs("div", { className: "chat-bubble-wrap", children: [_jsx("div", { className: "chat-avatar-slot", "aria-hidden": !showAvatar, children: showAvatar ? (_jsx("div", { className: "chat-avatar", children: comment.author?.photoUrl ? (_jsx("img", { src: comment.author.photoUrl, alt: "", width: 36, height: 36 })) : (initials(name)) })) : null }), _jsxs("div", { className: "chat-message-stack", children: [reportBadge ? (_jsxs("div", { className: "chat-report-badge", "aria-label": "\u0416\u0430\u043B\u043E\u0431\u0430", children: [_jsx("span", { className: "chat-report-badge__label", children: "\u0416\u0430\u043B\u043E\u0431\u0430" }), reportBadge.openCount > 0 ? (_jsx("span", { className: "chat-report-badge__count", children: reportBadge.openCount })) : null, reportBadge.linkedReportClosed ? (_jsx("span", { className: "chat-report-badge__muted", children: " \u00B7 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D\u0430" })) : null] })) : null, _jsx(MessageBubble, { own: own, name: name, text: comment.text, createdAt: comment.createdAt, isEdited: comment.isEdited, onOpenMenuAt: openAt, onClick: onBubbleClick, onContextMenu: onContextMenu, onPointerDown: onPointerDown, onPointerUp: clearLongPress, onPointerCancel: clearLongPress, onPointerLeave: clearLongPress, onTouchMove: onTouchMove }), _jsx(ReactionBar, { state: reactionState, onToggleReaction: onToggleReaction })] })] }) }));
+    return (_jsx("div", { className: rowClass, "data-comment-id": comment.id, "data-author-id": comment.authorId, "data-user-id": comment.authorId, role: "listitem", children: _jsxs("div", { className: "chat-bubble-wrap", children: [_jsx("div", { className: "chat-avatar-slot", "aria-hidden": !showAvatar, children: showAvatar && !isThreadHeader ? (_jsx("div", { className: "chat-avatar", children: comment.author?.photoUrl ? (_jsx("img", { src: comment.author.photoUrl, alt: "", width: 36, height: 36 })) : (initials(name)) })) : null }), _jsxs("div", { className: "chat-message-stack", children: [reportBadge ? (_jsxs("div", { className: "chat-report-badge", "aria-label": "\u0416\u0430\u043B\u043E\u0431\u0430", children: [_jsx("span", { className: "chat-report-badge__label", children: "\u0416\u0430\u043B\u043E\u0431\u0430" }), reportBadge.openCount > 0 ? (_jsx("span", { className: "chat-report-badge__count", children: reportBadge.openCount })) : null, reportBadge.linkedReportClosed ? (_jsx("span", { className: "chat-report-badge__muted", children: " \u00B7 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D\u0430" })) : null] })) : null, _jsx(MessageBubble, { own: isThreadHeader ? false : own, name: name, text: comment.text, createdAt: comment.createdAt, isEdited: comment.isEdited, showMenu: !isThreadHeader, onOpenMenuAt: openAt, onClick: onBubbleClick, onContextMenu: onContextMenu, onPointerDown: onPointerDown, onPointerUp: clearLongPress, onPointerCancel: clearLongPress, onPointerLeave: clearLongPress, onTouchMove: onTouchMove }), !isThreadHeader ? _jsx(ReactionBar, { state: reactionState, onToggleReaction: onToggleReaction }) : null] })] }) }));
 }

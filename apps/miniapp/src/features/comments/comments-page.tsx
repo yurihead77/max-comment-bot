@@ -81,6 +81,8 @@ export function CommentsPage() {
       authorId: c.authorId as string,
       createdAt: c.createdAt as string,
       isEdited: Boolean(c.isEdited),
+      kind: ((c.kind as string | undefined) ?? "comment") as "comment" | "thread_header",
+      systemAuthorName: (c.systemAuthorName as string | null | undefined) ?? null,
       author: (c.author as CommentItemModel["author"]) ?? null
     }));
     setComments(mapped);

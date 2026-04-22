@@ -6,6 +6,7 @@ interface MessageBubbleProps {
   text: string;
   createdAt: string;
   isEdited: boolean;
+  showMenu?: boolean;
   onOpenMenuAt: (x: number, y: number) => void;
   onClick: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
@@ -22,6 +23,7 @@ export function MessageBubble({
   text,
   createdAt,
   isEdited,
+  showMenu = true,
   onOpenMenuAt,
   onClick,
   onContextMenu,
@@ -42,19 +44,21 @@ export function MessageBubble({
       onPointerLeave={onPointerLeave}
       onTouchMove={onTouchMove}
     >
-      <button
-        type="button"
-        className="chat-bubble__menu-hit"
-        aria-label="Меню сообщения"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-          onOpenMenuAt(r.left + r.width / 2, r.bottom);
-        }}
-      >
-        ⋯
-      </button>
+      {showMenu ? (
+        <button
+          type="button"
+          className="chat-bubble__menu-hit"
+          aria-label="Меню сообщения"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+            onOpenMenuAt(r.left + r.width / 2, r.bottom);
+          }}
+        >
+          ⋯
+        </button>
+      ) : null}
       <MessageMeta name={name} createdAt={createdAt} isEdited={isEdited} />
       <p className="chat-bubble__text">{text}</p>
     </div>

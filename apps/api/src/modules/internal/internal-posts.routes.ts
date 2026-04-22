@@ -9,8 +9,20 @@ const registerSchema = z.object({
   postId: z.string().optional(),
   chatId: z.string().min(1),
   messageId: z.string().min(1),
-  botMessageText: z.string().optional()
+  botMessageText: z.string().optional(),
+  chatTitle: z.string().optional()
 });
+
+const THREAD_HEADER_SYSTEM_MAX_USER_ID = "system:thread-header";
+const THREAD_HEADER_FALLBACK_TEXT = "Пост без текстового описания";
+const THREAD_HEADER_MAX_TEXT_LENGTH = 800;
+
+function buildThreadHeaderText(raw: string | null | undefined): string {
+  const base = (raw ?? "").trim();
+  const normalized = base.length > 0 ? base : THREAD_HEADER_FALLBACK_TEXT;
+  if (normalized.length <= THREAD_HEADER_MAX_TEXT_LENGTH) return normalized;
+  return `${normalized.slice(0, THREAD_HEADER_MAX_TEXT_LENGTH - 1).trimEnd()}…`;
+}
 
 function prismaMeta(e: Prisma.PrismaClientKnownRequestError): Record<string, unknown> {
   return { code: e.code, meta: e.meta ?? undefined, message: e.message };
@@ -23,7 +35,7 @@ export const internalPostsRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply.code(400).send({ error: "invalid body", details: parsed.error.flatten() });
       }
-      const { postId, chatId, messageId, botMessageText } = parsed.data;
+      const { postId, chatId, messageId, botMessageText, chatTitle } = parsed.data;
 
       if (await isModerationChat(app.prisma, chatId)) {
         request.log.info({ route: "/api/internal/posts/register", chatId }, "internal register: skipped (moderation chat)");
@@ -36,15 +48,16 @@ export const internalPostsRoutes: FastifyPluginAsync = async (app) => {
           chatId,
           messageIdLen: messageId.length,
           hasPostId: Boolean(postId),
-          hasBotMessageText: botMessageText !== undefined && botMessageText !== ""
+          hasBotMessageText: botMessageText !== undefined && botMessageText !== "",
+          hasChatTitle: chatTitle !== undefined && chatTitle.trim().length > 0
         },
         "internal register: parsed body, before Prisma"
       );
 
       const chat = await app.prisma.chat.upsert({
         where: { maxChatId: chatId },
-        create: { maxChatId: chatId, type: "group" },
-        update: {}
+        create: { maxChatId: chatId, type: "group", title: chatTitle?.trim() || null },
+        update: chatTitle && chatTitle.trim().length > 0 ? { title: chatTitle.trim() } : {}
       });
 
       request.log.info({ route: "/api/internal/posts/register", chatDbId: chat.id }, "internal register: chat upsert ok");
@@ -80,6 +93,48 @@ export const internalPostsRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      const headerText = buildThreadHeaderText(botMessageText);
+      const headerKey = `post:${post.id}`;
+      const headerAuthor = (chat.title ?? "").trim() || "Канал";
+
+      const headerResult = await app.prisma.$transaction(async (tx) => {
+        const systemUser = await tx.user.upsert({
+          where: { maxUserId: THREAD_HEADER_SYSTEM_MAX_USER_ID },
+          create: { maxUserId: THREAD_HEADER_SYSTEM_MAX_USER_ID, username: "thread_header" },
+          update: {}
+        });
+        const created = await tx.comment.upsert({
+          where: { threadHeaderKey: headerKey },
+          create: {
+            postId: post.id,
+            authorId: systemUser.id,
+            kind: "thread_header",
+            threadHeaderKey: headerKey,
+            systemAuthor: headerAuthor,
+            text: headerText,
+            status: "active"
+          },
+          update: {
+            text: headerText,
+            systemAuthor: headerAuthor,
+            status: "active"
+          },
+          select: { id: true, createdAt: true, updatedAt: true }
+        });
+        const existed = created.createdAt.getTime() !== created.updatedAt.getTime();
+        return { existed };
+      });
+
+      request.log.info(
+        {
+          route: "/api/internal/posts/register",
+          postId: post.id,
+          threadHeaderCreated: !headerResult.existed,
+          threadHeaderAlreadyExisted: headerResult.existed,
+          threadHeaderTextLength: headerText.length
+        },
+        "internal register: thread header upsert result"
+      );
       request.log.info({ route: "/api/internal/posts/register", postId: post.id }, "internal register: success");
       return reply.send({ id: post.id });
     } catch (err) {

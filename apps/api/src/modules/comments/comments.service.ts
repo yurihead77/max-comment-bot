@@ -5,6 +5,7 @@ export async function syncPostCommentsCount(app: FastifyInstance, postId: string
   const count = await app.prisma.comment.count({
     where: {
       postId,
+      kind: "comment",
       status: "active"
     }
   });

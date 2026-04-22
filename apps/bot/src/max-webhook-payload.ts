@@ -83,6 +83,24 @@ export function extractChatIdFromMessage(message: Record<string, unknown>): stri
   return undefined;
 }
 
+export function extractChatTitleFromMessage(message: Record<string, unknown>): string | undefined {
+  const directChat = message.chat;
+  if (directChat && typeof directChat === "object") {
+    const t = (directChat as Record<string, unknown>).title;
+    if (typeof t === "string" && t.trim().length > 0) return t.trim();
+  }
+
+  const rec = message.recipient;
+  if (rec && typeof rec === "object") {
+    const nestedChat = (rec as Record<string, unknown>).chat;
+    if (nestedChat && typeof nestedChat === "object") {
+      const t = (nestedChat as Record<string, unknown>).title;
+      if (typeof t === "string" && t.trim().length > 0) return t.trim();
+    }
+  }
+  return undefined;
+}
+
 /**
  * Id for MAX `PUT /messages?message_id=…` matches **`Message.body.mid`** (and often `message.mid`).
  * Prefer **`body.mid`** over legacy/Telegram-style **`message_id`** on the same object so a synthetic

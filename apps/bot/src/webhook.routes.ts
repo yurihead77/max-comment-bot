@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import {
   extractChatIdFromMessage,
+  extractChatTitleFromMessage,
   extractMessageIdFromMessage,
   extractMessageText,
   extractSenderUserId,
@@ -20,7 +21,7 @@ export interface WebhookRoutesOpts {
 
 async function postInternalRegister(
   apiBaseUrl: string,
-  body: { chatId: string; messageId: string; botMessageText?: string },
+  body: { chatId: string; messageId: string; botMessageText?: string; chatTitle?: string },
   log: { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void; error: (o: object, m?: string) => void }
 ): Promise<{ id?: string; error?: string; skipped?: boolean }> {
   const base = apiBaseUrl.replace(/\/+$/, "");
@@ -32,7 +33,8 @@ async function postInternalRegister(
       body: JSON.stringify({
         chatId: body.chatId,
         messageId: body.messageId,
-        botMessageText: body.botMessageText
+        botMessageText: body.botMessageText,
+        chatTitle: body.chatTitle
       })
     });
     const text = await res.text();
@@ -174,6 +176,7 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
       const chatId = extractChatIdFromMessage(parsed.message);
       const messageId = extractMessageIdFromMessage(parsed.message);
       const text = extractMessageText(parsed.message);
+      const chatTitle = extractChatTitleFromMessage(parsed.message);
       const senderUserId = extractSenderUserId(parsed.message);
 
       request.log.info(
@@ -206,7 +209,7 @@ export const webhookRoutes: FastifyPluginAsync<WebhookRoutesOpts> = async (app, 
 
       const reg = await postInternalRegister(
         apiBaseUrl,
-        { chatId, messageId, botMessageText: text },
+        { chatId, messageId, botMessageText: text, chatTitle },
         request.log
       );
       if (reg.skipped) {

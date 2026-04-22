@@ -86,7 +86,10 @@ export function CommentList({ comments, currentUserId, selfDisplayHint, postId, 
                             }
                             : undefined;
                         const rowHighlight = highlightCommentId === comment.id;
-                        return (_jsx(CommentItem, { comment: comment, currentUserId: currentUserId, selfDisplayHint: selfDisplayHint, showAvatar: showAvatar, groupedWithPrevious: grouped, reportHighlight: rowHighlight, reportBadge: badge, onOpenMenu: (c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y }), reactionState: reactionState, onToggleReaction: (emoji) => toggleReaction(comment.id, emoji) }, comment.id));
+                        const showDiscussionStartDivider = (comment.kind ?? "comment") === "thread_header" &&
+                            index + 1 < comments.length &&
+                            (comments[index + 1]?.kind ?? "comment") !== "thread_header";
+                        return (_jsxs("div", { children: [_jsx(CommentItem, { comment: comment, currentUserId: currentUserId, selfDisplayHint: selfDisplayHint, showAvatar: showAvatar, groupedWithPrevious: grouped, reportHighlight: rowHighlight, reportBadge: badge, onOpenMenu: (c, anchor) => setMenu({ comment: c, x: anchor.x, y: anchor.y }), reactionState: reactionState, onToggleReaction: (emoji) => toggleReaction(comment.id, emoji) }), showDiscussionStartDivider ? (_jsxs("div", { className: "thread-start-divider", role: "separator", "aria-label": "\u041D\u0430\u0447\u0430\u043B\u043E \u043E\u0431\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F", children: [_jsx("span", { className: "thread-start-divider__line" }), _jsx("span", { className: "thread-start-divider__label", children: "\u041D\u0430\u0447\u0430\u043B\u043E \u043E\u0431\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F" }), _jsx("span", { className: "thread-start-divider__line" })] })) : null] }, comment.id));
                     } })) }), _jsx(CommentContextMenu, { comment: menu?.comment ?? null, anchor: menu ? { x: menu.x, y: menu.y } : null, currentUserId: currentUserId, postId: postId, reactionCounts: menuReactions?.counts ?? {}, userReaction: menuReactions?.pick, onToggleReaction: menuId
                     ? (emoji) => {
                         toggleReaction(menuId, emoji);

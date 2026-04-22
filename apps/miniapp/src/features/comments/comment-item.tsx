@@ -20,6 +20,8 @@ export interface CommentItemModel {
   authorId: string;
   createdAt: string;
   isEdited: boolean;
+  kind?: "comment" | "thread_header";
+  systemAuthorName?: string | null;
   author?: CommentAuthorModel | null;
 }
 
@@ -74,8 +76,12 @@ export function CommentItem({
   reactionState,
   onToggleReaction
 }: CommentItemProps) {
+  const kind = comment.kind ?? "comment";
+  const isThreadHeader = kind === "thread_header";
   const own = comment.authorId === currentUserId;
-  const name = resolveDisplayName(comment, currentUserId, selfDisplayHint);
+  const name = isThreadHeader
+    ? comment.systemAuthorName?.trim() || "Канал"
+    : resolveDisplayName(comment, currentUserId, selfDisplayHint);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const longPressListeners = useRef<{
     move: (e: PointerEvent) => void;
@@ -103,11 +109,13 @@ export function CommentItem({
   };
 
   const onContextMenu = (e: React.MouseEvent) => {
+    if (isThreadHeader) return;
     e.preventDefault();
     openAt(e.clientX, e.clientY);
   };
 
   const onBubbleClick = (e: React.MouseEvent) => {
+    if (isThreadHeader) return;
     if ((e.target as HTMLElement).closest(".chat-bubble__menu-hit")) return;
     const sel = typeof window !== "undefined" ? window.getSelection?.()?.toString() ?? "" : "";
     if (sel.length > 0) return;
@@ -115,6 +123,7 @@ export function CommentItem({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (isThreadHeader) return;
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest(".chat-bubble__menu-hit")) return;
     clearLongPress();
@@ -164,6 +173,7 @@ export function CommentItem({
 
   const rowClass =
     "chat-row" +
+    (isThreadHeader ? " chat-row--thread-header" : "") +
     (own ? " chat-row--own" : "") +
     (groupedWithPrevious ? " chat-row--grouped" : "") +
     (reportHighlight ? " chat-row--report-target" : "");
@@ -178,7 +188,7 @@ export function CommentItem({
     >
       <div className="chat-bubble-wrap">
         <div className="chat-avatar-slot" aria-hidden={!showAvatar}>
-          {showAvatar ? (
+          {showAvatar && !isThreadHeader ? (
             <div className="chat-avatar">
               {comment.author?.photoUrl ? (
                 <img src={comment.author.photoUrl} alt="" width={36} height={36} />
@@ -201,11 +211,12 @@ export function CommentItem({
             </div>
           ) : null}
           <MessageBubble
-            own={own}
+            own={isThreadHeader ? false : own}
             name={name}
             text={comment.text}
             createdAt={comment.createdAt}
             isEdited={comment.isEdited}
+            showMenu={!isThreadHeader}
             onOpenMenuAt={openAt}
             onClick={onBubbleClick}
             onContextMenu={onContextMenu}
@@ -215,7 +226,7 @@ export function CommentItem({
             onPointerLeave={clearLongPress}
             onTouchMove={onTouchMove}
           />
-          <ReactionBar state={reactionState} onToggleReaction={onToggleReaction} />
+          {!isThreadHeader ? <ReactionBar state={reactionState} onToggleReaction={onToggleReaction} /> : null}
         </div>
       </div>
     </div>

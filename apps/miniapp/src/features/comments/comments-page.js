@@ -59,6 +59,8 @@ export function CommentsPage() {
             authorId: c.authorId,
             createdAt: c.createdAt,
             isEdited: Boolean(c.isEdited),
+            kind: (c.kind ?? "comment"),
+            systemAuthorName: c.systemAuthorName ?? null,
             author: c.author ?? null
         }));
         setComments(mapped);
